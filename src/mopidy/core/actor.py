@@ -16,7 +16,7 @@ from mopidy import audio, backend, mixer
 from mopidy.audio import PlaybackState
 from mopidy.core.history import HistoryController
 from mopidy.core.library import LibraryController
-from mopidy.core.listener import CoreListener
+from mopidy.core.listener import CoreEventEmitter
 from mopidy.core.mixer import MixerController
 from mopidy.core.playback import PlaybackController
 from mopidy.core.playlists import PlaylistsController
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from mopidy.core.playback import PlaybackControllerProxy
     from mopidy.core.playlists import PlaylistsControllerProxy
     from mopidy.core.tracklist import TracklistControllerProxy
-    from mopidy.types import Uri
+    from mopidy.types import Percentage, Uri
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class Core(
     def reached_end_of_stream(self) -> None:
         self.playback._on_end_of_stream()
 
-    def stream_changed(self, uri: Uri) -> None:
+    def stream_changed(self, uri: Uri | None) -> None:
         self.playback._on_stream_changed(uri)
 
     def position_changed(self, position: int) -> None:
@@ -135,15 +135,15 @@ class Core(
 
     def playlists_loaded(self) -> None:
         # Forward event from backend to frontends
-        CoreListener.send("playlists_loaded")
+        CoreEventEmitter.playlists_loaded()
 
-    def volume_changed(self, volume: int) -> None:
+    def volume_changed(self, volume: Percentage) -> None:
         # Forward event from mixer to frontends
-        CoreListener.send("volume_changed", volume=volume)
+        CoreEventEmitter.volume_changed(volume=volume)
 
     def mute_changed(self, mute: bool) -> None:
         # Forward event from mixer to frontends
-        CoreListener.send("mute_changed", mute=mute)
+        CoreEventEmitter.mute_changed(mute=mute)
 
     def tags_changed(self, tags: set[str]) -> None:
         if not self.audio or "title" not in tags:
@@ -161,7 +161,7 @@ class Core(
             current_track = self.playback.get_current_track()
             if current_track is not None and current_track.name != title:
                 self.playback._stream_title = title
-                CoreListener.send("stream_title_changed", title=title)
+                CoreEventEmitter.stream_title_changed(title=title)
 
     def _setup(self) -> None:
         """Do not call this function. It is for internal use at startup."""

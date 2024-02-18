@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import pykka
 from pykka.typing import ActorMemberMixin, proxy_field, proxy_method
@@ -75,7 +75,7 @@ class Mixer:
         external entity changing the volume.
         """
         logger.debug("Mixer event: volume_changed(volume=%d)", volume)
-        MixerListener.send("volume_changed", volume=volume)
+        MixerEventEmitter.volume_changed(volume=volume)
 
     def get_mute(self) -> bool | None:
         """Get mute state of the mixer.
@@ -106,7 +106,7 @@ class Mixer:
         any external entity changing the mute state.
         """
         logger.debug("Mixer event: mute_changed(mute=%s)", mute)
-        MixerListener.send("mute_changed", mute=mute)
+        MixerEventEmitter.mute_changed(mute=mute)
 
     def ping(self) -> bool:
         """Called to check if the actor is still alive."""
@@ -122,11 +122,6 @@ class MixerListener(listener.Listener):
     and for providing default implementations for those listeners that are not
     interested in all events.
     """
-
-    @staticmethod
-    def send(event: str, **kwargs: Any) -> None:
-        """Helper to allow calling of mixer listener events."""
-        listener.send(MixerListener, event, **kwargs)
 
     def volume_changed(self, volume: Percentage) -> None:
         """Called after the volume has changed.
@@ -144,6 +139,16 @@ class MixerListener(listener.Listener):
         :param mute: :class:`True` if muted, :class:`False` if not muted
         :type mute: bool
         """
+
+
+class MixerEventEmitter(listener.EventEmitter[MixerListener]):
+    @classmethod
+    def volume_changed(cls, *, volume: Percentage) -> None:
+        return cls.emit(MixerListener, "volume_changed", volume=volume)
+
+    @classmethod
+    def mute_changed(cls, *, mute: bool) -> None:
+        return cls.emit(MixerListener, "mute_changed", mute=mute)
 
 
 class MixerActor(pykka.ThreadingActor, Mixer):

@@ -2,6 +2,7 @@ import collections
 import datetime
 import logging
 import numbers
+from typing import Mapping
 
 from mopidy.internal import log
 from mopidy.internal.gi import GLib, Gst
@@ -30,7 +31,7 @@ def repr_tags(taglist, max_bytes=10):
     return repr(result)
 
 
-def convert_taglist(taglist):
+def convert_taglist(taglist) -> Mapping[str, list]:
     """Convert a :class:`Gst.TagList` to plain Python types.
 
     Knows how to convert:

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pykka.typing import proxy_method
 
 from mopidy import exceptions
-from mopidy.core import listener
+from mopidy.core.listener import CoreEventEmitter
 from mopidy.internal import validation
 from mopidy.models import Playlist, Ref
 from mopidy.types import UriScheme
@@ -143,7 +143,7 @@ class PlaylistsController:
                 if result is None:
                     continue
                 validation.check_instance(result, Playlist)
-                listener.CoreListener.send("playlist_changed", playlist=result)
+                CoreEventEmitter.playlist_changed(playlist=result)
                 return result
 
         return None
@@ -178,7 +178,7 @@ class PlaylistsController:
             success = True
 
         if success:
-            listener.CoreListener.send("playlist_deleted", uri=uri)
+            CoreEventEmitter.playlist_deleted(uri=uri)
 
         return success
 
@@ -232,7 +232,7 @@ class PlaylistsController:
                 playlists_loaded = True
 
         if playlists_loaded:
-            listener.CoreListener.send("playlists_loaded")
+            CoreEventEmitter.playlists_loaded()
 
     def save(self, playlist: Playlist) -> Playlist | None:
         """Save the playlist.
@@ -269,7 +269,7 @@ class PlaylistsController:
             if result is not None:
                 validation.check_instance(result, Playlist)
             if result:
-                listener.CoreListener.send("playlist_changed", playlist=result)
+                CoreEventEmitter.playlist_changed(playlist=result)
             return result
 
         return None

@@ -5,8 +5,12 @@ tests of the core and backends.
 """
 
 
+from typing import Callable
+
 import pykka
 from mopidy import audio
+from mopidy.audio.listener import AudioEventEmitter
+from mopidy.types import DurationMs, Percentage, Uri
 
 
 def create_proxy(config=None, mixer=None):
@@ -39,48 +43,48 @@ class DummyAudio(pykka.ThreadingActor):
     def get_position(self):
         return self._position
 
-    def set_position(self, position):
+    def set_position(self, position: DurationMs) -> bool:
         self._position = position
-        audio.AudioListener.send("position_changed", position=position)
+        AudioEventEmitter.position_changed(position=position)
         return True
 
-    def start_playback(self):
+    def start_playback(self) -> bool:
         return self._change_state(audio.PlaybackState.PLAYING)
 
     def pause_playback(self):
         return self._change_state(audio.PlaybackState.PAUSED)
 
-    def prepare_change(self):
+    def prepare_change(self) -> bool:
         self._uri = None
         self._source_setup_callback = None
         return True
 
-    def stop_playback(self):
+    def stop_playback(self) -> bool:
         return self._change_state(audio.PlaybackState.STOPPED)
 
-    def get_volume(self):
+    def get_volume(self) -> Percentage:
         return self._volume
 
-    def set_volume(self, volume):
+    def set_volume(self, volume: Percentage) -> bool:
         self._volume = volume
         return True
 
-    def get_current_tags(self):
+    def get_current_tags(self) -> dict:
         return self._tags
 
-    def set_source_setup_callback(self, callback):
+    def set_source_setup_callback(self, callback) -> None:
         self._source_setup_callback = callback
 
-    def set_about_to_finish_callback(self, callback):
+    def set_about_to_finish_callback(self, callback) -> None:
         self._about_to_finish_callback = callback
 
-    def enable_sync_handler(self):
+    def enable_sync_handler(self) -> None:
         pass
 
-    def wait_for_state_change(self):
+    def wait_for_state_change(self) -> None:
         pass
 
-    def _change_state(self, new_state):
+    def _change_state(self, new_state: audio.PlaybackState) -> bool:
         if not self._uri:
             return False
 
@@ -105,18 +109,18 @@ class DummyAudio(pykka.ThreadingActor):
 
         if new_state == audio.PlaybackState.PLAYING:
             self._tags["audio-codec"] = ["fake info..."]
-            audio.AudioListener.send("tags_changed", tags=["audio-codec"])
+            AudioEventEmitter.tags_changed(tags=["audio-codec"])
 
         return self._uri not in self._bad_uris
 
-    def trigger_fake_playback_failure(self, uri):
+    def trigger_fake_playback_failure(self, uri: Uri) -> None:
         self._bad_uris.add(uri)
 
-    def trigger_fake_tags_changed(self, tags):
+    def trigger_fake_tags_changed(self, tags: dict[str, list]) -> None:
         self._tags.update(tags)
-        audio.AudioListener.send("tags_changed", tags=self._tags.keys())
+        AudioEventEmitter.tags_changed(tags=self._tags.keys())
 
-    def get_source_setup_callback(self):
+    def get_source_setup_callback(self) -> Callable[[], None]:
         # This needs to be called from outside the actor or we lock up.
         def wrapper():
             if self._source_setup_callback:
@@ -124,7 +128,7 @@ class DummyAudio(pykka.ThreadingActor):
 
         return wrapper
 
-    def get_about_to_finish_callback(self):
+    def get_about_to_finish_callback(self) -> Callable[[], None]:
         # This needs to be called from outside the actor or we lock up.
         def wrapper():
             if self._about_to_finish_callback:

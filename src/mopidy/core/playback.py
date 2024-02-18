@@ -9,7 +9,7 @@ from pykka.messages import ProxyCall
 from pykka.typing import proxy_method
 
 from mopidy.audio import PlaybackState
-from mopidy.core import listener
+from mopidy.core.listener import CoreEventEmitter
 from mopidy.exceptions import CoreError
 from mopidy.internal import deprecation, models, validation
 from mopidy.types import DurationMs, UriScheme
@@ -140,7 +140,7 @@ class PlaybackController:
             self._trigger_track_playback_ended(self.get_time_position())
         self._set_current_tl_track(None)
 
-    def _on_stream_changed(self, _uri: Uri) -> None:
+    def _on_stream_changed(self, _uri: Uri | None) -> None:
         if self._last_position is None:
             position = self.get_time_position()
         else:
@@ -495,21 +495,19 @@ class PlaybackController:
 
     def _trigger_track_playback_paused(self) -> None:
         logger.debug("Triggering track playback paused event")
-        if self.get_current_tl_track() is None:
+        if (tl_track := self.get_current_tl_track()) is None:
             return
-        listener.CoreListener.send(
-            "track_playback_paused",
-            tl_track=self.get_current_tl_track(),
+        CoreEventEmitter.track_playback_paused(
+            tl_track=tl_track,
             time_position=self.get_time_position(),
         )
 
     def _trigger_track_playback_resumed(self) -> None:
         logger.debug("Triggering track playback resumed event")
-        if self.get_current_tl_track() is None:
+        if (tl_track := self.get_current_tl_track()) is None:
             return
-        listener.CoreListener.send(
-            "track_playback_resumed",
-            tl_track=self.get_current_tl_track(),
+        CoreEventEmitter.track_playback_resumed(
+            tl_track=tl_track,
             time_position=self.get_time_position(),
         )
 
@@ -523,9 +521,12 @@ class PlaybackController:
             return
         self.core.tracklist._mark_playing(tl_track)
         self.core.history._add_track(tl_track.track)
-        listener.CoreListener.send("track_playback_started", tl_track=tl_track)
+        CoreEventEmitter.track_playback_started(tl_track=tl_track)
 
-    def _trigger_track_playback_ended(self, time_position_before_stop: int) -> None:
+    def _trigger_track_playback_ended(
+        self,
+        time_position_before_stop: DurationMs,
+    ) -> None:
         tl_track = self.get_current_tl_track()
         if tl_track is None:
             return
@@ -537,8 +538,7 @@ class PlaybackController:
         self._previous = False
 
         # TODO: Use the lowest of track duration and position.
-        listener.CoreListener.send(
-            "track_playback_ended",
+        CoreEventEmitter.track_playback_ended(
             tl_track=tl_track,
             time_position=time_position_before_stop,
         )
@@ -549,14 +549,15 @@ class PlaybackController:
         new_state: PlaybackState,
     ) -> None:
         logger.debug("Triggering playback state change event")
-        listener.CoreListener.send(
-            "playback_state_changed", old_state=old_state, new_state=new_state
+        CoreEventEmitter.playback_state_changed(
+            old_state=old_state,
+            new_state=new_state,
         )
 
-    def _trigger_seeked(self, time_position: int) -> None:
+    def _trigger_seeked(self, time_position: DurationMs) -> None:
         # TODO: Trigger this from audio events?
         logger.debug("Triggering seeked event")
-        listener.CoreListener.send("seeked", time_position=time_position)
+        CoreEventEmitter.seeked(time_position=time_position)
 
     def _save_state(self) -> models.PlaybackState:
         return models.PlaybackState(

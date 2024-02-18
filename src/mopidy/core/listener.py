@@ -1,33 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from mopidy import listener
 
 if TYPE_CHECKING:
-    from typing import TypeAlias
-
     from mopidy.audio import PlaybackState
     from mopidy.models import Playlist, TlTrack
     from mopidy.types import DurationMs, Percentage, Uri
-
-
-CoreEvent: TypeAlias = Literal[
-    "track_playback_paused",
-    "track_playback_resumed",
-    "track_playback_started",
-    "track_playback_ended",
-    "playback_state_changed",
-    "tracklist_changed",
-    "playlists_loaded",
-    "playlist_changed",
-    "playlist_deleted",
-    "options_changed",
-    "volume_changed",
-    "mute_changed",
-    "seeked",
-    "stream_title_changed",
-]
 
 
 class CoreListener(listener.Listener):
@@ -40,12 +20,7 @@ class CoreListener(listener.Listener):
     interested in all events.
     """
 
-    @staticmethod
-    def send(event: CoreEvent, **kwargs: Any) -> None:
-        """Helper to allow calling of core listener events."""
-        listener.send(CoreListener, event, **kwargs)
-
-    def on_event(self, event: CoreEvent, **kwargs: Any) -> None:
+    def on_event(self, event: str, **kwargs: Any) -> None:
         """Called on all events.
 
         *MAY* be implemented by actor. By default, this method forwards the
@@ -191,3 +166,101 @@ class CoreListener(listener.Listener):
         :param title: the new stream title
         :type title: string
         """
+
+
+class CoreEventEmitter(listener.EventEmitter[CoreListener]):
+    @classmethod
+    def track_playback_paused(
+        cls,
+        *,
+        tl_track: TlTrack,
+        time_position: DurationMs,
+    ) -> None:
+        return cls.emit(
+            CoreListener,
+            "track_playback_paused",
+            tl_track=tl_track,
+            time_position=time_position,
+        )
+
+    @classmethod
+    def track_playback_resumed(
+        cls,
+        *,
+        tl_track: TlTrack,
+        time_position: DurationMs,
+    ) -> None:
+        return cls.emit(
+            CoreListener,
+            "track_playback_resumed",
+            tl_track=tl_track,
+            time_position=time_position,
+        )
+
+    @classmethod
+    def track_playback_started(cls, *, tl_track: TlTrack) -> None:
+        return cls.emit(CoreListener, "track_playback_started", tl_track=tl_track)
+
+    @classmethod
+    def track_playback_ended(
+        cls,
+        *,
+        tl_track: TlTrack,
+        time_position: DurationMs,
+    ) -> None:
+        return cls.emit(
+            CoreListener,
+            "track_playback_ended",
+            tl_track=tl_track,
+            time_position=time_position,
+        )
+
+    @classmethod
+    def playback_state_changed(
+        cls,
+        *,
+        old_state: PlaybackState,
+        new_state: PlaybackState,
+    ) -> None:
+        return cls.emit(
+            CoreListener,
+            "playback_state_changed",
+            old_state=old_state,
+            new_state=new_state,
+        )
+
+    @classmethod
+    def tracklist_changed(cls) -> None:
+        return cls.emit(CoreListener, "tracklist_changed")
+
+    @classmethod
+    def playlists_loaded(cls) -> None:
+        return cls.emit(CoreListener, "playlists_loaded")
+
+    @classmethod
+    def playlist_changed(cls, *, playlist: Playlist) -> None:
+        return cls.emit(CoreListener, "playlist_changed", playlist=playlist)
+
+    @classmethod
+    def playlist_deleted(cls, *, uri: Uri) -> None:
+        return cls.emit(CoreListener, "playlist_deleted", uri=uri)
+
+    @classmethod
+    def options_changed(cls) -> None:
+        return cls.emit(CoreListener, "options_changed")
+
+    @classmethod
+    def volume_changed(cls, *, volume: Percentage) -> None:
+        return cls.emit(CoreListener, "volume_changed", volume=volume)
+
+    @classmethod
+    def mute_changed(cls, *, mute: bool) -> None:
+        return cls.emit(CoreListener, "mute_changed", mute=mute)
+
+    @classmethod
+    def seeked(cls, *, time_position: DurationMs) -> None:
+        return cls.emit(CoreListener, "seeked", time_position=time_position)
+
+    @classmethod
+    def stream_title_changed(cls, *, title: str) -> None:
+        return cls.emit(CoreListener, "stream_title_changed", title=title)

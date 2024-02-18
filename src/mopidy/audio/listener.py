@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from mopidy import listener
 
@@ -19,18 +19,13 @@ class AudioListener(listener.Listener):
     interested in all events.
     """
 
-    @staticmethod
-    def send(event: str, **kwargs: Any) -> None:
-        """Helper to allow calling of audio listener events."""
-        listener.send(AudioListener, event, **kwargs)
-
     def reached_end_of_stream(self) -> None:
         """Called whenever the end of the audio stream is reached.
 
         *MAY* be implemented by actor.
         """
 
-    def stream_changed(self, uri: Uri) -> None:
+    def stream_changed(self, uri: Uri | None) -> None:
         """Called whenever the audio stream changes.
 
         *MAY* be implemented by actor.
@@ -92,3 +87,37 @@ class AudioListener(listener.Listener):
         :param tags: The tags that have just been updated.
         :type tags: :class:`set` of strings
         """
+
+
+class AudioEventEmitter(listener.EventEmitter[AudioListener]):
+    @classmethod
+    def reached_end_of_stream(cls) -> None:
+        return cls.emit(AudioListener, "reached_end_of_stream")
+
+    @classmethod
+    def stream_changed(cls, *, uri: Uri | None) -> None:
+        return cls.emit(AudioListener, "stream_changed", uri=uri)
+
+    @classmethod
+    def position_changed(cls, *, position: DurationMs) -> None:
+        return cls.emit(AudioListener, "position_changed", position=position)
+
+    @classmethod
+    def state_changed(
+        cls,
+        *,
+        old_state: PlaybackState,
+        new_state: PlaybackState,
+        target_state: PlaybackState | None,
+    ) -> None:
+        return cls.emit(
+            AudioListener,
+            "state_changed",
+            old_state=old_state,
+            new_state=new_state,
+            target_state=target_state,
+        )
+
+    @classmethod
+    def tags_changed(cls, *, tags: set[str]) -> None:
+        return cls.emit(AudioListener, "tags_changed", tags=tags)

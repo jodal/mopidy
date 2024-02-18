@@ -356,14 +356,14 @@ class LookupBadBackendsTest(MockBackendCorePlaylistsBase):
 
 @mock.patch("mopidy.core.playlists.logger")
 class RefreshBadBackendsTest(MockBackendCorePlaylistsBase):
-    @mock.patch("mopidy.core.listener.CoreListener.send")
+    @mock.patch("mopidy.listener.send")
     def test_backend_raises_exception(self, send, logger):
         self.playlists.refresh.return_value.get.side_effect = Exception
         self.core.playlists.refresh()
         assert not send.called
         logger.exception.assert_called_with(mock.ANY, "DummyBackend")
 
-    @mock.patch("mopidy.core.listener.CoreListener.send")
+    @mock.patch("mopidy.listener.send")
     def test_backend_raises_exception_called_with_uri(self, send, logger):
         self.playlists.refresh.return_value.get.side_effect = Exception
         self.core.playlists.refresh("dummy")

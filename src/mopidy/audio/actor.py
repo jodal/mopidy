@@ -13,10 +13,10 @@ from mopidy import exceptions
 from mopidy.audio import tags as tags_lib
 from mopidy.audio import utils
 from mopidy.audio.constants import PlaybackState
-from mopidy.audio.listener import AudioListener
+from mopidy.audio.listener import AudioEventEmitter
 from mopidy.internal import process
 from mopidy.internal.gi import GLib, Gst, GstPbutils
-from mopidy.types import DurationMs, Percentage
+from mopidy.types import DurationMs, Percentage, Uri
 
 if TYPE_CHECKING:
     from mopidy.config import Config
@@ -185,13 +185,13 @@ class _Handler:
         elif msg.type == Gst.MessageType.STREAM_START:
             self.on_stream_start()
 
-    def on_pad_event(self, _pad, pad_probe_info):
+    def on_pad_event(self, _pad, pad_probe_info) -> Gst.PadProbeReturn:
         event = pad_probe_info.get_event()
         if event.type == Gst.EventType.SEGMENT:
             self.on_segment(event.parse_segment())
         return Gst.PadProbeReturn.OK
 
-    def on_playbin_state_changed(self, old_state, new_state, pending_state):
+    def on_playbin_state_changed(self, old_state, new_state, pending_state) -> None:
         gst_logger.debug(
             "Got STATE_CHANGED bus message: old=%s new=%s pending=%s",
             old_state.value_name,
@@ -230,15 +230,14 @@ class _Handler:
             new_state,
             target_state,
         )
-        AudioListener.send(
-            "state_changed",
+        AudioEventEmitter.state_changed(
             old_state=old_state,
             new_state=new_state,
             target_state=target_state,
         )
         if new_state == PlaybackState.STOPPED:
             logger.debug("Audio event: stream_changed(uri=None)")
-            AudioListener.send("stream_changed", uri=None)
+            AudioEventEmitter.stream_changed(uri=None)
 
         if "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
             assert self._audio._playbin
@@ -248,7 +247,7 @@ class _Handler:
                 file_name="mopidy",
             )
 
-    def on_buffering(self, percent, structure=None):
+    def on_buffering(self, percent, structure=None) -> None:
         assert self._audio._playbin
 
         if self._audio._target_state < Gst.State.PAUSED:
@@ -273,27 +272,27 @@ class _Handler:
 
         gst_logger.log(level, "Got BUFFERING bus message: percent=%d%%", percent)
 
-    def on_end_of_stream(self):
+    def on_end_of_stream(self) -> None:
         gst_logger.debug("Got EOS (end of stream) bus message.")
         logger.debug("Audio event: reached_end_of_stream()")
         self._audio._tags = {}
-        AudioListener.send("reached_end_of_stream")
+        AudioEventEmitter.reached_end_of_stream()
 
-    def on_error(self, error, debug):
+    def on_error(self, error, debug) -> None:
         gst_logger.error(f"GStreamer error: {error.message}")
         gst_logger.debug(f"Got ERROR bus message: error={error!r} debug={debug!r}")
 
         # TODO: is this needed?
         self._audio.stop_playback()
 
-    def on_warning(self, error, debug):
+    def on_warning(self, error, debug) -> None:
         gst_logger.warning(f"GStreamer warning: {error.message}")
         gst_logger.debug(f"Got WARNING bus message: error={error!r} debug={debug!r}")
 
-    def on_async_done(self):
+    def on_async_done(self) -> None:
         gst_logger.debug("Got ASYNC_DONE bus message.")
 
-    def on_tag(self, taglist):
+    def on_tag(self, taglist) -> None:
         tags = tags_lib.convert_taglist(taglist)
         gst_logger.debug(f"Got TAG bus message: tags={tags_lib.repr_tags(tags)}")
 
@@ -304,18 +303,18 @@ class _Handler:
 
         # TODO: Add proper tests for only emitting changed tags.
         unique = object()
-        changed = []
+        changed: set[str] = set()
         for key, value in tags.items():
             # Update any tags that changed, and store changed keys.
             if self._audio._tags.get(key, unique) != value:
                 self._audio._tags[key] = value
-                changed.append(key)
+                changed.add(key)
 
         if changed:
             logger.debug("Audio event: tags_changed(tags=%r)", changed)
-            AudioListener.send("tags_changed", tags=changed)
+            AudioEventEmitter.tags_changed(tags=changed)
 
-    def on_missing_plugin(self, msg):
+    def on_missing_plugin(self, msg) -> None:
         desc = GstPbutils.missing_plugin_message_get_description(msg)
         debug = GstPbutils.missing_plugin_message_get_installer_detail(msg)
         gst_logger.debug("Got missing-plugin bus message: description=%r", desc)
@@ -329,13 +328,13 @@ class _Handler:
         # can provide a 'mopidy install-missing-plugins' if the system has the
         # required helper installed?
 
-    def on_stream_start(self):
+    def on_stream_start(self) -> None:
         assert self._audio._playbin
 
         gst_logger.debug("Got STREAM_START bus message")
         uri = self._audio._pending_uri
         logger.debug("Audio event: stream_changed(uri=%r)", uri)
-        AudioListener.send("stream_changed", uri=uri)
+        AudioEventEmitter.stream_changed(uri=uri)
 
         # Emit any postponed tags that we got after about-to-finish.
         tags, self._audio._pending_tags = self._audio._pending_tags, None
@@ -343,13 +342,13 @@ class _Handler:
 
         if tags:
             logger.debug("Audio event: tags_changed(tags=%r)", tags.keys())
-            AudioListener.send("tags_changed", tags=tags.keys())
+            AudioEventEmitter.tags_changed(tags=set(tags.keys()))
 
         if self._audio._pending_metadata:
             self._audio._playbin.send_event(self._audio._pending_metadata)
             self._audio._pending_metadata = None
 
-    def on_segment(self, segment):
+    def on_segment(self, segment: Gst.Segment) -> None:
         gst_logger.debug(
             "Got SEGMENT pad event: "
             "rate=%(rate)s format=%(format)s start=%(start)s stop=%(stop)s "
@@ -362,9 +361,9 @@ class _Handler:
                 "position": segment.position,
             },
         )
-        position_ms = segment.position // Gst.MSECOND
+        position_ms = DurationMs(segment.position // Gst.MSECOND)
         logger.debug("Audio event: position_changed(position=%r)", position_ms)
-        AudioListener.send("position_changed", position=position_ms)
+        AudioEventEmitter.position_changed(position=position_ms)
 
 
 # TODO: create a player class which replaces the actors internals
@@ -389,7 +388,7 @@ class Audio(pykka.ThreadingActor):
         self._buffering: bool = False
         self._live_stream: bool = False
         self._tags: dict[str, list[Any]] = {}
-        self._pending_uri: str | None = None
+        self._pending_uri: Uri | None = None
         self._pending_tags: dict[str, list[Any]] | None = None
         self._pending_metadata = None
 
@@ -570,7 +569,7 @@ class Audio(pykka.ThreadingActor):
 
     def set_uri(
         self,
-        uri: str,
+        uri: Uri,
         live_stream: bool = False,
         download: bool = False,
     ) -> None:
