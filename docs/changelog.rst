@@ -73,7 +73,11 @@ Playlist controller
 Tracklist controller
 ^^^^^^^^^^^^^^^^^^^^
 
-- No changes so far.
+- :meth:`mopidy.core.TracklistController.add`
+  no longer accepts ``Track`` objects,
+  which has been deprecated since Mopidy 1.0.
+  Use URIs instead.
+  (Fixes :issue:`1855`, PR: :issue:`2151`)
 
 Backend API
 -----------

@@ -6,9 +6,6 @@ import warnings
 # them easily when ignoring warnings.
 _MESSAGES = {
     # Deprecated features in core tracklist:
-    "core.tracklist.add:tracks_arg": (
-        'tracklist.add() "tracks" argument is deprecated'
-    ),
     "core.tracklist.eot_track": (
         "tracklist.eot_track() is pending deprecation, use tracklist.get_eot_tlid()"
     ),

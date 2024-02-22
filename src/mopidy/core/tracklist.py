@@ -341,17 +341,15 @@ class TracklistController:
         # 1 - len(tracks) Thus 'position - 1' will always be within the list.
         return self._tl_tracks[position - 1]
 
-    def add(  # noqa: C901
+    def add(
         self,
-        tracks: Iterable[Track] | None = None,
+        uris: Iterable[Uri],
         at_position: int | None = None,
-        uris: Iterable[Uri] | None = None,
     ) -> list[TlTrack]:
         """Add tracks to the tracklist.
 
-        If ``uris`` is given instead of ``tracks``, the URIs are
-        looked up in the library and the resulting tracks are added to the
-        tracklist.
+        The URIs are looked up in the library and the resulting tracks are added
+        to the tracklist.
 
         If ``at_position`` is given, the tracks are inserted at the given
         position in the tracklist. If ``at_position`` is not given, the tracks
@@ -359,34 +357,22 @@ class TracklistController:
 
         Triggers the :meth:`mopidy.core.CoreListener.tracklist_changed` event.
 
-        :param tracks: tracks to add
-        :param at_position: position in tracklist to add tracks
         :param uris: list of URIs for tracks to add
+        :param at_position: position in tracklist to add tracks
 
         .. versionadded:: 1.0
             The ``uris`` argument.
 
-        .. deprecated:: 1.0
+        .. versionremoved:: 1.0
             The ``tracks`` argument. Use ``uris``.
         """
-        if sum(o is not None for o in [tracks, uris]) != 1:
-            raise ValueError('Exactly one of "tracks" or "uris" must be set')
-
-        if tracks is not None:
-            validation.check_instances(tracks, Track)
-        if uris is not None:
-            validation.check_uris(uris)
+        validation.check_uris(uris)
         validation.check_integer(at_position or 0)
 
-        if tracks:
-            deprecation.warn("core.tracklist.add:tracks_arg")
-
-        if tracks is None:
-            tracks = []
-            assert uris is not None
-            track_map = self.core.library.lookup(uris=uris)
-            for uri in uris:
-                tracks.extend(track_map[uri])
+        track_map = self.core.library.lookup(uris=uris)
+        tracks: list[Track] = []
+        for uri in uris:
+            tracks.extend(track_map[uri])
 
         tl_tracks = []
         max_length = self.core._config["core"]["max_tracklist_length"]
@@ -399,11 +385,13 @@ class TracklistController:
 
             tl_track = TlTrack(self._next_tlid, track)
             self._next_tlid += 1
+
             if at_position is not None:
                 self._tl_tracks.insert(at_position, tl_track)
                 at_position += 1
             else:
                 self._tl_tracks.append(tl_track)
+
             tl_tracks.append(tl_track)
 
         if tl_tracks:
