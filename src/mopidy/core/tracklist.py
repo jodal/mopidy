@@ -581,7 +581,7 @@ class TracklistController:
 
     def _save_state(self) -> TracklistState:
         return TracklistState(
-            tl_tracks=self._tl_tracks,
+            tl_tracks=tuple(self._tl_tracks),
             next_tlid=self._next_tlid,
             consume=self.get_consume(),
             random=self.get_random(),
