@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import enum
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal, NewType, TypeVar
+from typing import TYPE_CHECKING, Annotated, Literal, NewType, TypeVar
+
+import msgspec
 
 if TYPE_CHECKING:
     from typing import TypeAlias
+
+
+# Date types
+Date = Annotated[str, msgspec.Meta(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+Year = Annotated[str, msgspec.Meta(pattern=r"^\d{4}$")]
+DateOrYear = Date | Year
 
 # Integer types
 Percentage = NewType("Percentage", int)
