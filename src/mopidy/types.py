@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal, NewType, TypeVar
 
@@ -57,3 +58,15 @@ TracklistField: TypeAlias = Literal[
 QueryField: TypeAlias = DistinctField | SearchField | TracklistField
 
 
+# Playback types.
+class PlaybackState(enum.StrEnum):
+    """Enum of playback states."""
+
+    #: Constant representing the paused state.
+    PAUSED = "paused"
+
+    #: Constant representing the playing state.
+    PLAYING = "playing"
+
+    #: Constant representing the stopped state.
+    STOPPED = "stopped"
