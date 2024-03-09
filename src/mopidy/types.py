@@ -16,8 +16,9 @@ Year = Annotated[str, msgspec.Meta(pattern=r"^\d{4}$")]
 DateOrYear = Date | Year
 
 # Integer types
-Percentage = NewType("Percentage", int)
-DurationMs = NewType("DurationMs", int)
+NonNegativeInt = Annotated[int, msgspec.Meta(ge=0)]
+Percentage = NewType("Percentage", Annotated[int, msgspec.Meta(ge=0, le=100)])
+DurationMs = NewType("DurationMs", NonNegativeInt)
 
 # URI types
 Uri = NewType(
