@@ -1,4 +1,3 @@
-import json
 import unittest
 
 import pytest
@@ -6,81 +5,18 @@ from mopidy.models import (
     Album,
     Artist,
     Image,
-    ModelJSONEncoder,
     Playlist,
     Ref,
     SearchResult,
     TlTrack,
     Track,
-    model_json_decoder,
 )
-
-
-class InheritanceTest(unittest.TestCase):
-    def test_weakref_and_slots_play_nice_in_subclass(self):
-        # Check that the following does not happen:
-        # TypeError: Error when calling the metaclass bases
-        #   __weakref__ slot disallowed: either we already got one...
-
-        class Foo(Track):
-            pass
-
-    def test_sub_class_can_have_its_own_slots(self):
-        # Needed for things like SpotifyTrack in mopidy-spotify 1.x
-
-        class Foo(Track):
-            __slots__ = ("_foo",)
-
-        f = Foo()
-        f._foo = 123
-
-    def test_sub_class_can_be_initialized(self):
-        # Fails with following error if fields are not handled across classes.
-        #   TypeError: __init__() got an unexpected keyword argument "type"
-        # Essentially this is testing that sub-classes take parent _fields into
-        # account.
-
-        class Foo(Ref):
-            pass
-
-        Foo.directory()
-
-
-class CachingTest(unittest.TestCase):
-    def test_same_instance(self):
-        assert Track() is Track()
-
-    def test_same_instance_with_values(self):
-        assert Track(uri="test") is Track(uri="test")
-
-    def test_different_instance_with_different_values(self):
-        assert Track(uri="test1") is not Track(uri="test2")
-
-    def test_different_instance_with_replace(self):
-        t = Track(uri="test1")
-        assert t is not t.replace(uri="test2")
 
 
 class GenericReplaceTest(unittest.TestCase):
     def compare(self, orig, other):
         assert orig == other
         assert id(orig) == id(other)
-
-    def test_replace_track(self):
-        track = Track()
-        self.compare(track, track.replace())
-
-    def test_replace_artist(self):
-        artist = Artist()
-        self.compare(artist, artist.replace())
-
-    def test_replace_album(self):
-        album = Album()
-        self.compare(album, album.replace())
-
-    def test_replace_playlist(self):
-        playlist = Playlist()
-        self.compare(playlist, playlist.replace())
 
     def test_replace_track_with_basic_values(self):
         track = Track(name="foo", uri="bar")
@@ -113,21 +49,21 @@ class GenericReplaceTest(unittest.TestCase):
 class RefTest(unittest.TestCase):
     def test_uri(self):
         uri = "an_uri"
-        ref = Ref(uri=uri)
+        ref = Ref.track(uri=uri, name="Foo")
         assert ref.uri == uri
         with pytest.raises(AttributeError):
             ref.uri = None
 
     def test_name(self):
         name = "a name"
-        ref = Ref(name=name)
+        ref = Ref.track(uri="uri", name=name)
         assert ref.name == name
         with pytest.raises(AttributeError):
             ref.name = None
 
     # TODO: add these for the more of the models?
     def test_del_name(self):
-        ref = Ref(name="foo")
+        ref = Ref.track(uri="foo", name="foo")
         with pytest.raises(AttributeError):
             del ref.name
 
@@ -138,19 +74,14 @@ class RefTest(unittest.TestCase):
     def test_repr_without_results(self):
         assert (
             repr(Ref(uri="uri", name="foo", type="artist"))
-            == "Ref(name='foo', type='artist', uri='uri')"
+            == "Ref(uri='uri', name='foo', type='artist')"
         )
 
     def test_serialize_without_results(self):
         self.assertDictEqual(
-            {"__model__": "Ref", "uri": "uri"}, Ref(uri="uri").serialize()
+            {"__model__": "Ref", "type": "track", "uri": "uri"},
+            Ref.track(uri="uri", name=None).serialize(),
         )
-
-    def test_to_json_and_back(self):
-        ref1 = Ref(uri="uri")
-        serialized = json.dumps(ref1, cls=ModelJSONEncoder)
-        ref2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert ref1 == ref2
 
     def test_type_constants(self):
         assert Ref.ALBUM == "album"
@@ -199,20 +130,20 @@ class ImageTest(unittest.TestCase):
             image.uri = None
 
     def test_width(self):
-        image = Image(width=100)
+        image = Image(uri="uri", width=100)
         assert image.width == 100
         with pytest.raises(AttributeError):
             image.width = None
 
     def test_height(self):
-        image = Image(height=100)
+        image = Image(uri="uri", height=100)
         assert image.height == 100
         with pytest.raises(AttributeError):
             image.height = None
 
     def test_invalid_kwarg(self):
         with pytest.raises(TypeError):
-            Image(foo="baz")
+            Image(uri="uri", foo="baz")
 
 
 class ArtistTest(unittest.TestCase):
@@ -249,7 +180,7 @@ class ArtistTest(unittest.TestCase):
             Artist(serialize="baz")
 
     def test_repr(self):
-        assert repr(Artist(uri="uri", name="name")) == "Artist(name='name', uri='uri')"
+        assert repr(Artist(uri="uri", name="name")) == "Artist(uri='uri', name='name')"
 
     def test_serialize(self):
         self.assertDictEqual(
@@ -262,87 +193,6 @@ class ArtistTest(unittest.TestCase):
             {"__model__": "Artist", "uri": "", "name": ""},
             Artist(uri="", name="").serialize(),
         )
-
-    def test_to_json_and_back(self):
-        artist1 = Artist(uri="uri", name="name")
-        serialized = json.dumps(artist1, cls=ModelJSONEncoder)
-        artist2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert artist1 == artist2
-
-    def test_to_json_and_back_with_unknown_field(self):
-        artist = Artist(uri="uri", name="name").serialize()
-        artist["foo"] = "foo"
-        serialized = json.dumps(artist)
-        with pytest.raises(TypeError):
-            json.loads(serialized, object_hook=model_json_decoder)
-
-    def test_to_json_and_back_with_field_matching_method(self):
-        artist = Artist(uri="uri", name="name").serialize()
-        artist["copy"] = "foo"
-        serialized = json.dumps(artist)
-        with pytest.raises(TypeError):
-            json.loads(serialized, object_hook=model_json_decoder)
-
-    def test_to_json_and_back_with_field_matching_internal_field(self):
-        artist = Artist(uri="uri", name="name").serialize()
-        artist["__mro__"] = "foo"
-        serialized = json.dumps(artist)
-        with pytest.raises(TypeError):
-            json.loads(serialized, object_hook=model_json_decoder)
-
-    def test_eq_name(self):
-        artist1 = Artist(name="name")
-        artist2 = Artist(name="name")
-        assert artist1 == artist2
-        assert hash(artist1) == hash(artist2)
-
-    def test_eq_uri(self):
-        artist1 = Artist(uri="uri")
-        artist2 = Artist(uri="uri")
-        assert artist1 == artist2
-        assert hash(artist1) == hash(artist2)
-
-    def test_eq_musibrainz_id(self):
-        artist1 = Artist(musicbrainz_id="id")
-        artist2 = Artist(musicbrainz_id="id")
-        assert artist1 == artist2
-        assert hash(artist1) == hash(artist2)
-
-    def test_eq(self):
-        artist1 = Artist(uri="uri", name="name", musicbrainz_id="id")
-        artist2 = Artist(uri="uri", name="name", musicbrainz_id="id")
-        assert artist1 == artist2
-        assert hash(artist1) == hash(artist2)
-
-    def test_eq_none(self):
-        assert Artist() is not None
-
-    def test_eq_other(self):
-        assert Artist() != "other"
-
-    def test_ne_name(self):
-        artist1 = Artist(name="name1")
-        artist2 = Artist(name="name2")
-        assert artist1 != artist2
-        assert hash(artist1) != hash(artist2)
-
-    def test_ne_uri(self):
-        artist1 = Artist(uri="uri1")
-        artist2 = Artist(uri="uri2")
-        assert artist1 != artist2
-        assert hash(artist1) != hash(artist2)
-
-    def test_ne_musicbrainz_id(self):
-        artist1 = Artist(musicbrainz_id="id1")
-        artist2 = Artist(musicbrainz_id="id2")
-        assert artist1 != artist2
-        assert hash(artist1) != hash(artist2)
-
-    def test_ne(self):
-        artist1 = Artist(uri="uri1", name="name1", musicbrainz_id="id1")
-        artist2 = Artist(uri="uri2", name="name2", musicbrainz_id="id2")
-        assert artist1 != artist2
-        assert hash(artist1) != hash(artist2)
 
 
 class AlbumTest(unittest.TestCase):
@@ -366,9 +216,6 @@ class AlbumTest(unittest.TestCase):
         assert artist in album.artists
         with pytest.raises(AttributeError):
             album.artists = None
-
-    def test_artists_none(self):
-        assert set() == Album(artists=None).artists
 
     def test_num_tracks(self):
         num_tracks = 11
@@ -403,19 +250,24 @@ class AlbumTest(unittest.TestCase):
             Album(foo="baz")
 
     def test_repr_without_artists(self):
-        assert repr(Album(uri="uri", name="name")) == "Album(name='name', uri='uri')"
+        assert (
+            repr(Album(uri="uri", name="name"))
+            == "Album(uri='uri', name='name', artists=frozenset())"
+        )
 
     def test_repr_with_artists(self):
         assert (
-            repr(Album(uri="uri", name="name", artists=[Artist(name="foo")]))
-            == "Album(artists=[Artist(name='foo')], name='name', uri='uri')"
+            repr(Album(uri="uri", name="name", artists=frozenset({Artist(name="foo")})))
+            == "Album(uri='uri', name='name', artists=frozenset({Artist(name='foo')}))"
         )
 
     def test_serialize_without_artists(self):
-        self.assertDictEqual(
-            {"__model__": "Album", "uri": "uri", "name": "name"},
-            Album(uri="uri", name="name").serialize(),
-        )
+        assert Album(uri="uri", name="name").serialize() == {
+            "__model__": "Album",
+            "uri": "uri",
+            "name": "name",
+            "artists": [],
+        }
 
     def test_serialize_with_artists(self):
         artist = Artist(name="foo")
@@ -428,137 +280,6 @@ class AlbumTest(unittest.TestCase):
             },
             Album(uri="uri", name="name", artists=[artist]).serialize(),
         )
-
-    def test_to_json_and_back(self):
-        album1 = Album(uri="uri", name="name", artists=[Artist(name="foo")])
-        serialized = json.dumps(album1, cls=ModelJSONEncoder)
-        album2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert album1 == album2
-
-    def test_eq_name(self):
-        album1 = Album(name="name")
-        album2 = Album(name="name")
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_uri(self):
-        album1 = Album(uri="uri")
-        album2 = Album(uri="uri")
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_artists(self):
-        artists = [Artist()]
-        album1 = Album(artists=artists)
-        album2 = Album(artists=artists)
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_artists_order(self):
-        artist1 = Artist(name="name1")
-        artist2 = Artist(name="name2")
-        album1 = Album(artists=[artist1, artist2])
-        album2 = Album(artists=[artist2, artist1])
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_num_tracks(self):
-        album1 = Album(num_tracks=2)
-        album2 = Album(num_tracks=2)
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_date(self):
-        date = "1977-01-01"
-        album1 = Album(date=date)
-        album2 = Album(date=date)
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_musibrainz_id(self):
-        album1 = Album(musicbrainz_id="id")
-        album2 = Album(musicbrainz_id="id")
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq(self):
-        artists = [Artist()]
-        album1 = Album(
-            name="name",
-            uri="uri",
-            artists=artists,
-            num_tracks=2,
-            musicbrainz_id="id",
-        )
-        album2 = Album(
-            name="name",
-            uri="uri",
-            artists=artists,
-            num_tracks=2,
-            musicbrainz_id="id",
-        )
-        assert album1 == album2
-        assert hash(album1) == hash(album2)
-
-    def test_eq_none(self):
-        assert Album() is not None
-
-    def test_eq_other(self):
-        assert Album() != "other"
-
-    def test_ne_name(self):
-        album1 = Album(name="name1")
-        album2 = Album(name="name2")
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne_uri(self):
-        album1 = Album(uri="uri1")
-        album2 = Album(uri="uri2")
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne_artists(self):
-        album1 = Album(artists=[Artist(name="name1")])
-        album2 = Album(artists=[Artist(name="name2")])
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne_num_tracks(self):
-        album1 = Album(num_tracks=1)
-        album2 = Album(num_tracks=2)
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne_date(self):
-        album1 = Album(date="1977-01-01")
-        album2 = Album(date="1977-01-02")
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne_musicbrainz_id(self):
-        album1 = Album(musicbrainz_id="id1")
-        album2 = Album(musicbrainz_id="id2")
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
-
-    def test_ne(self):
-        album1 = Album(
-            name="name1",
-            uri="uri1",
-            artists=[Artist(name="name1")],
-            num_tracks=1,
-            musicbrainz_id="id1",
-        )
-        album2 = Album(
-            name="name2",
-            uri="uri2",
-            artists=[Artist(name="name2")],
-            num_tracks=2,
-            musicbrainz_id="id2",
-        )
-        assert album1 != album2
-        assert hash(album1) != hash(album2)
 
 
 class TrackTest(unittest.TestCase):
@@ -583,9 +304,6 @@ class TrackTest(unittest.TestCase):
         with pytest.raises(AttributeError):
             track.artists = None
 
-    def test_artists_none(self):
-        assert set() == Track(artists=None).artists
-
     def test_composers(self):
         artists = [Artist(name="name1"), Artist(name="name2")]
         track = Track(composers=artists)
@@ -593,18 +311,12 @@ class TrackTest(unittest.TestCase):
         with pytest.raises(AttributeError):
             track.composers = None
 
-    def test_composers_none(self):
-        assert set() == Track(composers=None).composers
-
     def test_performers(self):
         artists = [Artist(name="name1"), Artist(name="name2")]
         track = Track(performers=artists)
         assert set(track.performers) == set(artists)
         with pytest.raises(AttributeError):
             track.performers = None
-
-    def test_performers_none(self):
-        assert set() == Track(performers=None).performers
 
     def test_album(self):
         album = Album()
@@ -660,259 +372,65 @@ class TrackTest(unittest.TestCase):
             Track(foo="baz")
 
     def test_repr_without_artists(self):
-        assert repr(Track(uri="uri", name="name")) == "Track(name='name', uri='uri')"
+        assert (
+            repr(Track(uri="uri", name="name")) == "Track(uri='uri', name='name', "
+            "artists=frozenset(), composers=frozenset(), performers=frozenset())"
+        )
 
     def test_repr_with_artists(self):
         assert (
             repr(Track(uri="uri", name="name", artists=[Artist(name="foo")]))
-            == "Track(artists=[Artist(name='foo')], name='name', uri='uri')"
+            == "Track(uri='uri', name='name', artists=[Artist(name='foo')], "
+            "composers=frozenset(), performers=frozenset())"
         )
 
     def test_serialize_without_artists(self):
-        self.assertDictEqual(
-            {"__model__": "Track", "uri": "uri", "name": "name"},
-            Track(uri="uri", name="name").serialize(),
-        )
+        assert Track(uri="uri", name="name").serialize() == {
+            "__model__": "Track",
+            "uri": "uri",
+            "artists": [],
+            "name": "name",
+            "composers": [],
+            "performers": [],
+        }
 
     def test_serialize_with_artists(self):
         artist = Artist(name="foo")
-        self.assertDictEqual(
-            {
-                "__model__": "Track",
-                "uri": "uri",
-                "name": "name",
-                "artists": [artist.serialize()],
-            },
-            Track(uri="uri", name="name", artists=[artist]).serialize(),
-        )
+        assert Track(uri="uri", name="name", artists=[artist]).serialize() == {
+            "__model__": "Track",
+            "uri": "uri",
+            "name": "name",
+            "artists": [artist.serialize()],
+            "composers": [],
+            "performers": [],
+        }
 
     def test_serialize_with_album(self):
         album = Album(name="foo")
-        self.assertDictEqual(
-            {
-                "__model__": "Track",
-                "uri": "uri",
-                "name": "name",
-                "album": album.serialize(),
-            },
-            Track(uri="uri", name="name", album=album).serialize(),
-        )
-
-    def test_to_json_and_back(self):
-        track1 = Track(
-            uri="uri",
-            name="name",
-            album=Album(name="foo"),
-            artists=[Artist(name="foo")],
-        )
-        serialized = json.dumps(track1, cls=ModelJSONEncoder)
-        track2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert track1 == track2
-
-    def test_eq_uri(self):
-        track1 = Track(uri="uri1")
-        track2 = Track(uri="uri1")
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_name(self):
-        track1 = Track(name="name1")
-        track2 = Track(name="name1")
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_artists(self):
-        artists = [Artist()]
-        track1 = Track(artists=artists)
-        track2 = Track(artists=artists)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_artists_order(self):
-        artist1 = Artist(name="name1")
-        artist2 = Artist(name="name2")
-        track1 = Track(artists=[artist1, artist2])
-        track2 = Track(artists=[artist2, artist1])
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_album(self):
-        album = Album()
-        track1 = Track(album=album)
-        track2 = Track(album=album)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_track_no(self):
-        track1 = Track(track_no=1)
-        track2 = Track(track_no=1)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_date(self):
-        date = "1977-01-01"
-        track1 = Track(date=date)
-        track2 = Track(date=date)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_length(self):
-        track1 = Track(length=100)
-        track2 = Track(length=100)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_bitrate(self):
-        track1 = Track(bitrate=100)
-        track2 = Track(bitrate=100)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_musibrainz_id(self):
-        track1 = Track(musicbrainz_id="id")
-        track2 = Track(musicbrainz_id="id")
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq(self):
-        date = "1977-01-01"
-        artists = [Artist()]
-        album = Album()
-        track1 = Track(
-            uri="uri",
-            name="name",
-            artists=artists,
-            album=album,
-            track_no=1,
-            date=date,
-            length=100,
-            bitrate=100,
-            musicbrainz_id="id",
-        )
-        track2 = Track(
-            uri="uri",
-            name="name",
-            artists=artists,
-            album=album,
-            track_no=1,
-            date=date,
-            length=100,
-            bitrate=100,
-            musicbrainz_id="id",
-        )
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_eq_none(self):
-        assert Track() is not None
-
-    def test_eq_other(self):
-        assert Track() != "other"
-
-    def test_ne_uri(self):
-        track1 = Track(uri="uri1")
-        track2 = Track(uri="uri2")
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_name(self):
-        track1 = Track(name="name1")
-        track2 = Track(name="name2")
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_artists(self):
-        track1 = Track(artists=[Artist(name="name1")])
-        track2 = Track(artists=[Artist(name="name2")])
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_album(self):
-        track1 = Track(album=Album(name="name1"))
-        track2 = Track(album=Album(name="name2"))
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_track_no(self):
-        track1 = Track(track_no=1)
-        track2 = Track(track_no=2)
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_date(self):
-        track1 = Track(date="1977-01-01")
-        track2 = Track(date="1977-01-02")
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_length(self):
-        track1 = Track(length=100)
-        track2 = Track(length=200)
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_bitrate(self):
-        track1 = Track(bitrate=100)
-        track2 = Track(bitrate=200)
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne_musicbrainz_id(self):
-        track1 = Track(musicbrainz_id="id1")
-        track2 = Track(musicbrainz_id="id2")
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ne(self):
-        track1 = Track(
-            uri="uri1",
-            name="name1",
-            artists=[Artist(name="name1")],
-            album=Album(name="name1"),
-            track_no=1,
-            date="1977-01-01",
-            length=100,
-            bitrate=100,
-            musicbrainz_id="id1",
-        )
-        track2 = Track(
-            uri="uri2",
-            name="name2",
-            artists=[Artist(name="name2")],
-            album=Album(name="name2"),
-            track_no=2,
-            date="1977-01-02",
-            length=200,
-            bitrate=200,
-            musicbrainz_id="id2",
-        )
-        assert track1 != track2
-        assert hash(track1) != hash(track2)
-
-    def test_ignores_values_with_default_value_none(self):
-        track1 = Track(name="name1")
-        track2 = Track(name="name1", album=None)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
-
-    def test_replace_can_reset_to_default_value(self):
-        track1 = Track(name="name1")
-        track2 = Track(name="name1", album=Album()).replace(album=None)
-        assert track1 == track2
-        assert hash(track1) == hash(track2)
+        assert Track(uri="uri", name="name", album=album).serialize() == {
+            "__model__": "Track",
+            "uri": "uri",
+            "name": "name",
+            "album": album.serialize(),
+            "artists": [],
+            "composers": [],
+            "performers": [],
+        }
 
 
 class TlTrackTest(unittest.TestCase):
     def test_tlid(self):
         tlid = 123
-        tl_track = TlTrack(tlid=tlid)
+        track = Track()
+        tl_track = TlTrack(tlid=tlid, track=track)
         assert tl_track.tlid == tlid
         with pytest.raises(AttributeError):
             tl_track.tlid = None
 
     def test_track(self):
+        tlid = 123
         track = Track()
-        tl_track = TlTrack(track=track)
+        tl_track = TlTrack(tlid=tlid, track=track)
         assert tl_track.track == track
         with pytest.raises(AttributeError):
             tl_track.track = None
@@ -939,7 +457,8 @@ class TlTrackTest(unittest.TestCase):
     def test_repr(self):
         assert (
             repr(TlTrack(tlid=123, track=Track(uri="uri")))
-            == "TlTrack(tlid=123, track=Track(uri='uri'))"
+            == "TlTrack(tlid=123, track=Track(uri='uri', artists=frozenset(), "
+            "composers=frozenset(), performers=frozenset()))"
         )
 
     def test_serialize(self):
@@ -949,12 +468,6 @@ class TlTrackTest(unittest.TestCase):
             TlTrack(tlid=123, track=track).serialize(),
         )
 
-    def test_to_json_and_back(self):
-        tl_track1 = TlTrack(tlid=123, track=Track(uri="uri", name="name"))
-        serialized = json.dumps(tl_track1, cls=ModelJSONEncoder)
-        tl_track2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert tl_track1 == tl_track2
-
     def test_eq(self):
         tlid = 123
         track = Track()
@@ -962,24 +475,6 @@ class TlTrackTest(unittest.TestCase):
         tl_track2 = TlTrack(tlid=tlid, track=track)
         assert tl_track1 == tl_track2
         assert hash(tl_track1) == hash(tl_track2)
-
-    def test_eq_none(self):
-        assert TlTrack() is not None
-
-    def test_eq_other(self):
-        assert TlTrack() != "other"
-
-    def test_ne_tlid(self):
-        tl_track1 = TlTrack(tlid=123)
-        tl_track2 = TlTrack(tlid=321)
-        assert tl_track1 != tl_track2
-        assert hash(tl_track1) != hash(tl_track2)
-
-    def test_ne_track(self):
-        tl_track1 = TlTrack(track=Track(uri="a"))
-        tl_track2 = TlTrack(track=Track(uri="b"))
-        assert tl_track1 != tl_track2
-        assert hash(tl_track1) != hash(tl_track2)
 
 
 class PlaylistTest(unittest.TestCase):
@@ -1084,20 +579,24 @@ class PlaylistTest(unittest.TestCase):
 
     def test_repr_without_tracks(self):
         assert (
-            repr(Playlist(uri="uri", name="name")) == "Playlist(name='name', uri='uri')"
+            repr(Playlist(uri="uri", name="name"))
+            == "Playlist(uri='uri', name='name', tracks=())"
         )
 
     def test_repr_with_tracks(self):
         assert (
             repr(Playlist(uri="uri", name="name", tracks=[Track(name="foo")]))
-            == "Playlist(name='name', tracks=[Track(name='foo')], uri='uri')"
+            == "Playlist(uri='uri', name='name', tracks=[Track(name='foo', "
+            "artists=frozenset(), composers=frozenset(), performers=frozenset())])"
         )
 
     def test_serialize_without_tracks(self):
-        self.assertDictEqual(
-            {"__model__": "Playlist", "uri": "uri", "name": "name"},
-            Playlist(uri="uri", name="name").serialize(),
-        )
+        assert Playlist(uri="uri", name="name").serialize() == {
+            "__model__": "Playlist",
+            "uri": "uri",
+            "name": "name",
+            "tracks": (),
+        }
 
     def test_serialize_with_tracks(self):
         track = Track(name="foo")
@@ -1110,90 +609,6 @@ class PlaylistTest(unittest.TestCase):
             },
             Playlist(uri="uri", name="name", tracks=[track]).serialize(),
         )
-
-    def test_to_json_and_back(self):
-        playlist1 = Playlist(uri="uri", name="name")
-        serialized = json.dumps(playlist1, cls=ModelJSONEncoder)
-        playlist2 = json.loads(serialized, object_hook=model_json_decoder)
-        assert playlist1 == playlist2
-
-    def test_eq_name(self):
-        playlist1 = Playlist(name="name")
-        playlist2 = Playlist(name="name")
-        assert playlist1 == playlist2
-        assert hash(playlist1) == hash(playlist2)
-
-    def test_eq_uri(self):
-        playlist1 = Playlist(uri="uri")
-        playlist2 = Playlist(uri="uri")
-        assert playlist1 == playlist2
-        assert hash(playlist1) == hash(playlist2)
-
-    def test_eq_tracks(self):
-        tracks = [Track()]
-        playlist1 = Playlist(tracks=tracks)
-        playlist2 = Playlist(tracks=tracks)
-        assert playlist1 == playlist2
-        assert hash(playlist1) == hash(playlist2)
-
-    def test_eq_last_modified(self):
-        playlist1 = Playlist(last_modified=1)
-        playlist2 = Playlist(last_modified=1)
-        assert playlist1 == playlist2
-        assert hash(playlist1) == hash(playlist2)
-
-    def test_eq(self):
-        tracks = [Track()]
-        playlist1 = Playlist(uri="uri", name="name", tracks=tracks, last_modified=1)
-        playlist2 = Playlist(uri="uri", name="name", tracks=tracks, last_modified=1)
-        assert playlist1 == playlist2
-        assert hash(playlist1) == hash(playlist2)
-
-    def test_eq_none(self):
-        assert Playlist() is not None
-
-    def test_eq_other(self):
-        assert Playlist() != "other"
-
-    def test_ne_name(self):
-        playlist1 = Playlist(name="name1")
-        playlist2 = Playlist(name="name2")
-        assert playlist1 != playlist2
-        assert hash(playlist1) != hash(playlist2)
-
-    def test_ne_uri(self):
-        playlist1 = Playlist(uri="uri1")
-        playlist2 = Playlist(uri="uri2")
-        assert playlist1 != playlist2
-        assert hash(playlist1) != hash(playlist2)
-
-    def test_ne_tracks(self):
-        playlist1 = Playlist(tracks=[Track(uri="uri1")])
-        playlist2 = Playlist(tracks=[Track(uri="uri2")])
-        assert playlist1 != playlist2
-        assert hash(playlist1) != hash(playlist2)
-
-    def test_ne_last_modified(self):
-        playlist1 = Playlist(last_modified=1)
-        playlist2 = Playlist(last_modified=2)
-        assert playlist1 != playlist2
-        assert hash(playlist1) != hash(playlist2)
-
-    def test_ne(self):
-        playlist1 = Playlist(
-            uri="uri1",
-            name="name1",
-            tracks=[Track(uri="uri1")],
-            last_modified=1,
-        )
-        playlist2 = Playlist(
-            uri="uri2",
-            name="name2",
-            tracks=[Track(uri="uri2")],
-            last_modified=2,
-        )
-        assert playlist1 != playlist2
-        assert hash(playlist1) != hash(playlist2)
 
 
 class SearchResultTest(unittest.TestCase):
@@ -1230,10 +645,16 @@ class SearchResultTest(unittest.TestCase):
             SearchResult(foo="baz")
 
     def test_repr_without_results(self):
-        assert repr(SearchResult(uri="uri")) == "SearchResult(uri='uri')"
+        assert (
+            repr(SearchResult(uri="uri"))
+            == "SearchResult(uri='uri', tracks=(), artists=(), albums=())"
+        )
 
     def test_serialize_without_results(self):
-        self.assertDictEqual(
-            {"__model__": "SearchResult", "uri": "uri"},
-            SearchResult(uri="uri").serialize(),
-        )
+        assert SearchResult(uri="uri").serialize() == {
+            "__model__": "SearchResult",
+            "uri": "uri",
+            "albums": (),
+            "artists": (),
+            "tracks": (),
+        }
