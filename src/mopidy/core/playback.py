@@ -13,7 +13,7 @@ from mopidy.core import listener
 from mopidy.exceptions import CoreError
 from mopidy.internal import models, validation
 from mopidy.models import TlTrack
-from mopidy.types import DurationMs, UriScheme
+from mopidy.types import DurationMs, TracklistId, UriScheme
 
 if TYPE_CHECKING:
     from mopidy.audio.actor import AudioProxy
@@ -86,12 +86,10 @@ class PlaybackController:
             case None:
                 return None
 
-    def get_current_tlid(self) -> int | None:
-        """Get the currently playing or selected TLID.
+    def get_current_tlid(self) -> TracklistId | None:
+        """Get the currently playing or selected tracklist ID.
 
         Extracted from :meth:`get_current_tl_track` for convenience.
-
-        Returns a :class:`int` or :class:`None`.
 
         .. versionadded:: 1.1
         """
@@ -291,7 +289,7 @@ class PlaybackController:
 
     def play(
         self,
-        tlid: int | None = None,
+        tlid: TracklistId | None = None,
     ) -> None:
         """Play a track from the tracklist, specified by the tracklist ID.
 
