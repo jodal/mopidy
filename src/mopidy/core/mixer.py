@@ -10,10 +10,10 @@ from pykka.typing import proxy_method
 from mopidy import exceptions
 from mopidy.internal import validation
 from mopidy.internal.models import MixerState
-from mopidy.types import Percentage
 
 if TYPE_CHECKING:
     from mopidy.mixer import MixerProxy
+    from mopidy.types import Percentage
 
 logger = logging.getLogger(__name__)
 
