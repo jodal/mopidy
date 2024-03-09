@@ -6,6 +6,15 @@ from typing import TYPE_CHECKING, Literal, NewType, TypeVar
 if TYPE_CHECKING:
     from typing import TypeAlias
 
+# Integer types
+Percentage = NewType("Percentage", int)
+DurationMs = NewType("DurationMs", int)
+
+# URI types
+Uri = NewType("Uri", str)
+UriScheme = NewType("UriScheme", str)
+
+# Query types
 F = TypeVar("F")
 QueryValue: TypeAlias = str | int
 Query: TypeAlias = dict[F, Iterable[QueryValue]]
@@ -33,7 +42,8 @@ DistinctField: TypeAlias = Literal[
 SearchField: TypeAlias = DistinctField | Literal["any"]
 SearchQuery: TypeAlias = dict[SearchField, Iterable[QueryValue]]
 
-# Types for tracklist filtering
+# Tracklist types
+TracklistId = NewType("TracklistId", Annotated[int, msgspec.Meta(ge=0)])
 TracklistField: TypeAlias = Literal[
     "tlid",
     "uri",
@@ -46,10 +56,4 @@ TracklistField: TypeAlias = Literal[
 # Superset of all fields that can be used in a query
 QueryField: TypeAlias = DistinctField | SearchField | TracklistField
 
-# URI types
-Uri = NewType("Uri", str)
-UriScheme = NewType("UriScheme", str)
 
-# Integer types
-Percentage = NewType("Percentage", int)
-DurationMs = NewType("DurationMs", int)
