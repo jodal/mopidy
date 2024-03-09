@@ -20,8 +20,14 @@ Percentage = NewType("Percentage", int)
 DurationMs = NewType("DurationMs", int)
 
 # URI types
-Uri = NewType("Uri", str)
-UriScheme = NewType("UriScheme", str)
+Uri = NewType(
+    "Uri",
+    Annotated[str, msgspec.Meta(pattern=r"^[a-zA-Z][a-zA-Z0-9+\-.]*:.*$")],
+)
+UriScheme = NewType(
+    "UriScheme",
+    Annotated[str, msgspec.Meta(pattern=r"^[a-zA-Z][a-zA-Z0-9+\-.]*$")],
+)
 
 # Query types
 F = TypeVar("F")
