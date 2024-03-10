@@ -108,7 +108,12 @@ class JsonRpcSerializationTest(JsonRpcTestBase):
             {
                 "jsonrpc": "2.0",
                 "method": "foo",
-                "params": [{"__model__": "Artist", "name": "bar"}],
+                "params": [
+                    [  # A list of models as a single parameter
+                        {"__model__": "Artist", "name": "foo"},
+                        {"__model__": "Artist", "name": "bar"},
+                    ]
+                ],
                 "id": "1",
             }
         )
@@ -117,7 +122,12 @@ class JsonRpcSerializationTest(JsonRpcTestBase):
         self.wrapper.handle_data.assert_called_once_with(
             jsonrpc.Request.build(
                 method="foo",
-                params=[models.Artist(name="bar")],
+                params=[
+                    [
+                        models.Artist(name="foo"),
+                        models.Artist(name="bar"),
+                    ],
+                ],
                 id="1",
             )
         )

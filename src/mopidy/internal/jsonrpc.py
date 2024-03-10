@@ -11,13 +11,8 @@ from mopidy import models
 T = TypeVar("T")
 
 RequestId: TypeAlias = str | int | float
-Param: TypeAlias = (
-    None
-    | bool
-    | int
-    | float
-    | str
-    | models.Album
+Model: TypeAlias = (
+    models.Album
     | models.Artist
     | models.Image
     | models.Playlist
@@ -26,6 +21,8 @@ Param: TypeAlias = (
     | models.TlTrack
     | models.Track
 )
+ParamValue: TypeAlias = None | bool | int | float | str | Model
+Param: TypeAlias = ParamValue | list[ParamValue]
 
 
 class Request(msgspec.Struct, kw_only=True, omit_defaults=True):
