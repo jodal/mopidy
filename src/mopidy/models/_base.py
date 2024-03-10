@@ -1,6 +1,21 @@
-from typing import Any, Self
+from typing import Any, ClassVar, Self, TypeVar
 
 import msgspec
+
+T = TypeVar("T")
+
+
+class ModelRegistry:
+    _models: ClassVar[dict[str, type]] = {}
+
+    @classmethod
+    def add(cls, model: type[T]) -> type[T]:
+        cls._models[model.__name__] = model
+        return model
+
+    @classmethod
+    def get(cls, name: str) -> type:
+        return cls._models[name]
 
 
 class BaseModel(

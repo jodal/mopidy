@@ -5,7 +5,7 @@ from uuid import UUID
 
 import msgspec
 
-from mopidy.models._base import BaseModel
+from mopidy.models._base import BaseModel, ModelRegistry
 from mopidy.types import DateOrYear, DurationMs, NonNegativeInt, TracklistId, Uri
 
 __all__ = [
@@ -29,6 +29,7 @@ class RefType(enum.StrEnum):
     TRACK = "track"
 
 
+@ModelRegistry.add
 class Ref(
     BaseModel,
     kw_only=True,
@@ -84,6 +85,7 @@ class Ref(
         return cls(uri=uri, name=name, type=RefType.TRACK)
 
 
+@ModelRegistry.add
 class Image(
     BaseModel,
     kw_only=True,
@@ -101,6 +103,7 @@ class Image(
     height: NonNegativeInt | None = None
 
 
+@ModelRegistry.add
 class Artist(
     BaseModel,
     kw_only=True,
@@ -121,6 +124,7 @@ class Artist(
     musicbrainz_id: UUID | None = None
 
 
+@ModelRegistry.add
 class Album(
     BaseModel,
     kw_only=True,
@@ -150,6 +154,7 @@ class Album(
     musicbrainz_id: UUID | None = None
 
 
+@ModelRegistry.add
 class Track(
     BaseModel,
     kw_only=True,
@@ -207,6 +212,7 @@ class Track(
     last_modified: NonNegativeInt | None = None
 
 
+@ModelRegistry.add
 class TlTrack(
     BaseModel,
     kw_only=False,
@@ -236,6 +242,7 @@ class TlTrack(
         return iter((self.tlid, self.track))
 
 
+@ModelRegistry.add
 class Playlist(
     BaseModel,
     kw_only=True,
@@ -262,6 +269,7 @@ class Playlist(
         return len(self.tracks)
 
 
+@ModelRegistry.add
 class SearchResult(
     BaseModel,
     kw_only=True,
