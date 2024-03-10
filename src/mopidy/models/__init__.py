@@ -1,10 +1,11 @@
 import enum
 from collections.abc import Iterator
-from typing import Any, ClassVar, Literal, Self
+from typing import ClassVar, Literal, Self
 from uuid import UUID
 
 import msgspec
 
+from mopidy.models._base import BaseModel
 from mopidy.types import DateOrYear, DurationMs, NonNegativeInt, TracklistId, Uri
 
 __all__ = [
@@ -18,27 +19,6 @@ __all__ = [
     "TlTrack",
     "Track",
 ]
-
-
-class BaseModel(
-    msgspec.Struct,
-    frozen=True,
-    omit_defaults=True,
-    repr_omit_defaults=True,
-    tag_field="__model__",
-    tag=True,
-):
-    """Base class for all models."""
-
-    def replace(self, **kwargs: Any) -> Self:
-        """Return a new instance with updated fields."""
-        current_fields = msgspec.structs.asdict(self)
-        updated_fields = {**current_fields, **kwargs}
-        return type(self)(**updated_fields)
-
-    def serialize(self) -> dict[str, Any]:
-        """Serialize the model to bytes."""
-        return msgspec.to_builtins(self)
 
 
 class RefType(enum.StrEnum):

@@ -1,6 +1,7 @@
 import msgspec
 
-from mopidy.models import BaseModel, Ref, TlTrack
+from mopidy.models import Ref, TlTrack
+from mopidy.models._base import BaseModel
 from mopidy.types import DurationMs, NonNegativeInt, Percentage, TracklistId
 from mopidy.types import PlaybackState as PlaybackStateEnum
 
