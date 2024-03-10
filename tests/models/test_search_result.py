@@ -40,17 +40,11 @@ def test_invalid_kwarg():
 
 
 def test_repr_without_results():
-    assert (
-        repr(SearchResult(uri="uri"))
-        == "SearchResult(uri='uri', tracks=(), artists=(), albums=())"
-    )
+    assert repr(SearchResult(uri="uri")) == "SearchResult(uri='uri')"
 
 
 def test_serialize_without_results():
     assert SearchResult(uri="uri").serialize() == {
         "__model__": "SearchResult",
         "uri": "uri",
-        "albums": (),
-        "artists": (),
-        "tracks": (),
     }

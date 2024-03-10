@@ -3,8 +3,6 @@ from collections.abc import Iterator
 from typing import ClassVar, Literal, Self
 from uuid import UUID
 
-import msgspec
-
 from mopidy.models._base import BaseModel, ModelRegistry
 from mopidy.types import DateOrYear, DurationMs, NonNegativeInt, TracklistId, Uri
 
@@ -139,7 +137,7 @@ class Album(
     name: str | None = None
 
     #: A set of album artists. Read-only.
-    artists: frozenset[Artist] = msgspec.field(default_factory=frozenset)
+    artists: frozenset[Artist] = frozenset()
 
     #: The number of tracks in the album. Read-only.
     num_tracks: NonNegativeInt | None = None
@@ -169,16 +167,16 @@ class Track(
     name: str | None = None
 
     #: A set of track artists. Read-only.
-    artists: frozenset[Artist] = msgspec.field(default_factory=frozenset)
+    artists: frozenset[Artist] = frozenset()
 
     #: The track :class:`Album`. Read-only.
     album: Album | None = None
 
     #: A set of track composers. Read-only.
-    composers: frozenset[Artist] = msgspec.field(default_factory=frozenset)
+    composers: frozenset[Artist] = frozenset()
 
     #: A set of track performers. Read-only.
-    performers: frozenset[Artist] = msgspec.field(default_factory=frozenset)
+    performers: frozenset[Artist] = frozenset()
 
     #: The track genre. Read-only.
     genre: str | None = None
@@ -257,7 +255,7 @@ class Playlist(
     name: str | None = None
 
     #: The playlist's tracks. Read-only.
-    tracks: tuple[Track, ...] = msgspec.field(default_factory=tuple)
+    tracks: tuple[Track, ...] = ()
 
     #: The playlist modification time in milliseconds since Unix epoch.
     #: Read-only.
@@ -281,10 +279,10 @@ class SearchResult(
     uri: Uri | None = None
 
     #: The tracks matching the search query. Read-only.
-    tracks: tuple[Track, ...] = msgspec.field(default_factory=tuple)
+    tracks: tuple[Track, ...] = ()
 
     #: The artists matching the search query. Read-only.
-    artists: tuple[Artist, ...] = msgspec.field(default_factory=tuple)
+    artists: tuple[Artist, ...] = ()
 
     #: The albums matching the search query. Read-only.
-    albums: tuple[Album, ...] = msgspec.field(default_factory=tuple)
+    albums: tuple[Album, ...] = ()

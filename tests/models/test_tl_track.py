@@ -45,8 +45,7 @@ def test_iteration():
 def test_repr():
     assert (
         repr(TlTrack(tlid=123, track=Track(uri="uri")))
-        == "TlTrack(tlid=123, track=Track(uri='uri', artists=frozenset(), "
-        "composers=frozenset(), performers=frozenset()))"
+        == "TlTrack(tlid=123, track=Track(uri='uri'))"
     )
 
 

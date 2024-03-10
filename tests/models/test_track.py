@@ -104,17 +104,13 @@ def test_invalid_kwarg():
 
 
 def test_repr_without_artists():
-    assert (
-        repr(Track(uri="uri", name="name")) == "Track(uri='uri', name='name', "
-        "artists=frozenset(), composers=frozenset(), performers=frozenset())"
-    )
+    assert repr(Track(uri="uri", name="name")) == "Track(uri='uri', name='name')"
 
 
 def test_repr_with_artists():
     assert (
-        repr(Track(uri="uri", name="name", artists=[Artist(name="foo")]))
-        == "Track(uri='uri', name='name', artists=[Artist(name='foo')], "
-        "composers=frozenset(), performers=frozenset())"
+        repr(Track(uri="uri", name="name", artists=frozenset({Artist(name="foo")})))
+        == "Track(uri='uri', name='name', artists=frozenset({Artist(name='foo')}))"
     )
 
 
@@ -122,10 +118,7 @@ def test_serialize_without_artists():
     assert Track(uri="uri", name="name").serialize() == {
         "__model__": "Track",
         "uri": "uri",
-        "artists": [],
         "name": "name",
-        "composers": [],
-        "performers": [],
     }
 
 
@@ -136,8 +129,6 @@ def test_serialize_with_artists():
         "uri": "uri",
         "name": "name",
         "artists": [artist.serialize()],
-        "composers": [],
-        "performers": [],
     }
 
 
@@ -148,7 +139,4 @@ def test_serialize_with_album():
         "uri": "uri",
         "name": "name",
         "album": album.serialize(),
-        "artists": [],
-        "composers": [],
-        "performers": [],
     }

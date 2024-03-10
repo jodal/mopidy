@@ -64,10 +64,7 @@ def test_invalid_kwarg():
 
 
 def test_repr_without_artists():
-    assert (
-        repr(Album(uri="uri", name="name"))
-        == "Album(uri='uri', name='name', artists=frozenset())"
-    )
+    assert repr(Album(uri="uri", name="name")) == "Album(uri='uri', name='name')"
 
 
 def test_repr_with_artists():
@@ -82,7 +79,6 @@ def test_serialize_without_artists():
         "__model__": "Album",
         "uri": "uri",
         "name": "name",
-        "artists": [],
     }
 
 

@@ -70,20 +70,18 @@ class ModelTest(unittest.TestCase):
 
     def test_repr_without_models(self):
         assert (
-            repr(Playlist(uri="uri", name="name"))
-            == "Playlist(uri='uri', name='name', tracks=())"
+            repr(Playlist(uri="uri", name="name")) == "Playlist(uri='uri', name='name')"
         )
 
     def test_repr_with_models(self):
         assert (
             repr(Playlist(uri="uri", name="name", tracks=(Track(name=123),)))
-            == "Playlist(uri='uri', name='name', tracks=(Track(name=123, "
-            "artists=frozenset(), composers=frozenset(), performers=frozenset()),))"
+            == "Playlist(uri='uri', name='name', tracks=(Track(name=123),))"
         )
 
     def test_serialize_without_models(self):
         self.assertDictEqual(
-            {"__model__": "Playlist", "name": "name", "tracks": (), "uri": "uri"},
+            {"__model__": "Playlist", "name": "name", "uri": "uri"},
             Playlist(uri="uri", name="name").serialize(),
         )
 

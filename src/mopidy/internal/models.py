@@ -35,7 +35,7 @@ class HistoryState(
     """
 
     # The track history. Read-only.
-    history: tuple[HistoryTrack, ...] = msgspec.field(default_factory=tuple)
+    history: tuple[HistoryTrack, ...] = ()
 
 
 class MixerState(
@@ -104,7 +104,7 @@ class TracklistState(
     next_tlid: TracklistId
 
     # The list of tracks. Read-only.
-    tl_tracks: tuple[TlTrack, ...] = msgspec.field(default_factory=tuple)
+    tl_tracks: tuple[TlTrack, ...] = ()
 
 
 class CoreState(
