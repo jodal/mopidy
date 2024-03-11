@@ -47,19 +47,27 @@ class ErrorResponseDetails(msgspec.Struct, kw_only=True, omit_defaults=True):
     data: Any | None = None
 
 
-class Response(msgspec.Struct, kw_only=True, omit_defaults=True):
+class ErrorResponse(msgspec.Struct, kw_only=True, omit_defaults=True):
     jsonrpc: Literal["2.0"]
     id: RequestId | None  # None is allowed, but it must be set explicitly.
-    result: Any | None = None
-    error: ErrorResponseDetails | None = None
+    error: ErrorResponseDetails
 
     @classmethod
-    def as_success(cls, id: RequestId, result: Any) -> Self:
+    def build(cls, id: RequestId | None, error: ErrorResponseDetails) -> Self:
+        return cls(jsonrpc="2.0", id=id, error=error)
+
+
+class SuccessResponse(msgspec.Struct, kw_only=True, omit_defaults=True):
+    jsonrpc: Literal["2.0"]
+    id: RequestId
+    result: Any
+
+    @classmethod
+    def build(cls, id: RequestId, result: Any) -> Self:
         return cls(jsonrpc="2.0", id=id, result=result)
 
-    @classmethod
-    def as_error(cls, id: RequestId | None, error: ErrorResponseDetails) -> Self:
-        return cls(jsonrpc="2.0", id=id, error=error)
+
+Response: TypeAlias = ErrorResponse | SuccessResponse
 
 
 class ParamDescription(msgspec.Struct, kw_only=True, omit_defaults=True):
@@ -223,7 +231,7 @@ class Wrapper:
                     }
                 ) from exc
             else:
-                return Response.as_success(id=request.id, result=result)
+                return SuccessResponse.build(id=request.id, result=result)
         except JsonRpcError as exc:
             if request.id is None:
                 # Request is a notification, so we don't need to respond
@@ -289,8 +297,8 @@ class JsonRpcError(Exception):
     def get_response(
         self,
         request_id: RequestId | None = None,
-    ) -> Response:
-        return Response.as_error(
+    ) -> ErrorResponse:
+        return ErrorResponse.build(
             id=request_id,
             error=ErrorResponseDetails(
                 code=self.code,
