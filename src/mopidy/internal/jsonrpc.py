@@ -1,4 +1,5 @@
 import inspect
+import json
 import traceback
 from collections.abc import Callable
 from typing import Any, Literal, Self, TypeAlias, TypeVar
@@ -6,36 +7,22 @@ from typing import Any, Literal, Self, TypeAlias, TypeVar
 import msgspec
 import pykka
 
-from mopidy import models
-
 T = TypeVar("T")
 
 RequestId: TypeAlias = str | int | float
-Model: TypeAlias = (
-    models.Album
-    | models.Artist
-    | models.Image
-    | models.Playlist
-    | models.Ref
-    | models.SearchResult
-    | models.TlTrack
-    | models.Track
-)
-ParamValue: TypeAlias = None | bool | int | float | str | Model
-Param: TypeAlias = ParamValue | list[ParamValue]
 
 
 class Request(msgspec.Struct, kw_only=True, omit_defaults=True):
     jsonrpc: Literal["2.0"]
     method: str
-    params: list[Param] | dict[str, Param] | None = None
+    params: list[Any] | dict[str, Any] | None = None
     id: RequestId | None = None
 
     @classmethod
     def build(
         cls,
         method: str,
-        params: list[Param] | dict[str, Param] | None = None,
+        params: list[Any] | dict[str, Any] | None = None,
         id: RequestId | None = None,
     ) -> Self:
         return cls(jsonrpc="2.0", method=method, params=params, id=id)
@@ -112,21 +99,21 @@ class Wrapper:
 
     :param objects: mapping between mounting points and exposed functions or
         class instances
-    :type objects: dict
     :param decoders: object builders to be used by :func`json.loads`
-    :type decoders: list of functions taking a dict and returning a dict
     :param encoders: object serializers to be used by :func:`json.dumps`
-    :type encoders: list of :class:`json.JSONEncoder` subclasses with the
-        method :meth:`default` implemented
     """
 
     def __init__(
         self,
         objects: dict[str, Any],
+        decoders: list[Callable[[dict[str, Any]], Any]] | None = None,
+        encoders: list[type[json.JSONEncoder]] | None = None,
     ) -> None:
         if "" in objects:
             raise AttributeError("The empty string is not allowed as an object mount")
         self.objects = objects
+        self.decoder = get_combined_json_decoder(decoders or [])
+        self.encoder = get_combined_json_encoder(encoders or [])
 
     def handle_json(self, request_json: str) -> bytes | None:
         """
@@ -140,19 +127,14 @@ class Wrapper:
         :rtype: string or :class:`None`
         """
         try:
-            request = msgspec.json.decode(
-                request_json,
-                type=Request | list[Request],
-            )
-        except msgspec.ValidationError as exc:
-            response = JsonRpcInvalidRequestError(data=str(exc)).get_response()
-        except msgspec.DecodeError:
+            request = json.loads(request_json, object_hook=self.decoder)
+        except ValueError:
             response = JsonRpcParseError().get_response()
         else:
             response = self.handle_data(request)
         if response is None:
             return None
-        return msgspec.json.encode(response)
+        return json.dumps(response, cls=self.encoder)
 
     def handle_data(
         self,
@@ -191,6 +173,7 @@ class Wrapper:
 
     def _handle_single_request(self, request: Request) -> Response | None:
         try:
+            self._validate_request(request)
             args, kwargs = self._get_params(request)
         except JsonRpcInvalidRequestError as exc:
             return exc.get_response()
@@ -229,6 +212,18 @@ class Wrapper:
                 # Request is a notification, so we don't need to respond
                 return None
             return exc.get_response(request.id)
+
+    def _validate_request(self, request: Request) -> None:
+        if not isinstance(request, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise JsonRpcInvalidRequestError(data="Request must be an object")
+        if "jsonrpc" not in request:
+            raise JsonRpcInvalidRequestError(data="'jsonrpc' member must be included")
+        if request["jsonrpc"] != "2.0":
+            raise JsonRpcInvalidRequestError(data="'jsonrpc' value must be '2.0'")
+        if "method" not in request:
+            raise JsonRpcInvalidRequestError(data="'method' member must be included")
+        if not isinstance(request["method"], str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise JsonRpcInvalidRequestError(data="'method' must be a string")
 
     def _get_params(self, request: Request) -> tuple[list[Any], dict[Any, Any]]:
         if request.params is None:
@@ -323,6 +318,32 @@ class JsonRpcInvalidParamsError(JsonRpcError):
 class JsonRpcApplicationError(JsonRpcError):
     code = 0
     message = "Application error"
+
+
+def get_combined_json_decoder(
+    decoders: list[Callable[[dict[Any, Any]], Any]],
+) -> Callable[[dict[Any, Any]], Any]:
+    def decode(dct: dict[Any, Any]) -> dict[Any, Any]:
+        for decoder in decoders:
+            dct = decoder(dct)
+        return dct
+
+    return decode
+
+
+def get_combined_json_encoder(
+    encoders: list[type[json.JSONEncoder]],
+) -> type[json.JSONEncoder]:
+    class JsonRpcEncoder(json.JSONEncoder):
+        def default(self, o: Any) -> Any:
+            for encoder in encoders:
+                try:
+                    return encoder().default(o)
+                except TypeError:
+                    pass  # Try next encoder
+            return json.JSONEncoder.default(self, o)
+
+    return JsonRpcEncoder
 
 
 class Inspector:
