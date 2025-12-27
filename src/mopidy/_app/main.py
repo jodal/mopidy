@@ -17,14 +17,13 @@ from mopidy._lib.gi import (
     Gst,  # noqa: F401 (imported to test GStreamer presence)
 )
 
-from .config import ConfigCommand, ConfigErrors, ReadOnlyDict, format_initial, load
-from .deps import DepsCommand
-from .extensions import load_extensions, validate_extension_data
-from .logging import bootstrap_delayed_logging, setup_logging
+from .config import ConfigComments, ReadOnlyDict
+from .extensions import validate_extension_data
+from .logs import bootstrap_delayed_logging, setup_logging
 from .server import ServerCommand
 
 if TYPE_CHECKING:
-    from .extensions import ExtensionData, ExtensionsStatus
+    from .extensions import ExtensionsStatus
 
 try:
     # Make GLib's mainloop the event loop for python-dbus
@@ -83,7 +82,7 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
             args.config_overrides,
         )
 
-        create_core_dirs(config)
+        create_app_dirs(config)
         create_initial_config_file(config_files, extensions_data)
 
         setup_logging(config, args.base_verbosity_level, args.verbosity_level)
@@ -127,19 +126,7 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
             extensions_status["enabled"],
         )
 
-        # Config and deps commands are simply special cased for now.
-        if isinstance(args.command, ConfigCommand):
-            return args.command.run(
-                args=args,
-                config=config,
-                errors=config_errors,
-                schemas=[d.config_schema for d in extensions_data],
-            )
-        if isinstance(args.command, DepsCommand):
-            return args.command.run(
-                args=args,
-                config=config,
-            )
+        # TODO: Move below into run server command
 
         check_config_errors(config_errors, extensions_status)
 
@@ -189,34 +176,10 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
         raise
 
 
-def create_core_dirs(config: config_lib.Config) -> None:
+def create_app_dirs(config: config_lib.Config) -> None:
     paths.get_or_create_dir(config["core"]["cache_dir"])
     paths.get_or_create_dir(config["core"]["config_dir"])
     paths.get_or_create_dir(config["core"]["data_dir"])
-
-
-def create_initial_config_file(
-    config_files: list[Path],
-    extensions_data: list[ExtensionData],
-) -> None:
-    """Initialize whatever the last config file is with defaults."""
-    config_file = paths.expand_path(config_files[-1])
-
-    if config_file.exists():
-        return
-
-    try:
-        default = format_initial(extensions_data)
-        paths.get_or_create_file(
-            config_file,
-            mkdir=False,
-            content=default.encode(errors="surrogateescape"),
-        )
-        logger.info(f"Initialized {config_file.as_uri()} with default config")
-    except OSError as exc:
-        logger.warning(
-            f"Unable to initialize {config_file.as_uri()} with default config: {exc}",
-        )
 
 
 def log_extension_info(
@@ -231,7 +194,7 @@ def log_extension_info(
 
 
 def check_config_errors(
-    errors: ConfigErrors,
+    errors: ConfigComments,
     extensions_status: ExtensionsStatus,
 ) -> None:
     fatal_errors = []

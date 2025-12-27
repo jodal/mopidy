@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from importlib import metadata
-from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+
+import cyclopts
 
 from mopidy import config as config_lib
 from mopidy import exceptions
+from mopidy.commands import Command
 from mopidy.ext import Extension
 
 if TYPE_CHECKING:
-    from mopidy.commands import Command
+    from .config_schemas import ConfigSchemas
 
 logger = logging.getLogger(__name__)
 
@@ -21,67 +25,100 @@ class ExtensionsStatus(TypedDict):
     enabled: list[Extension]
 
 
-class ExtensionData(NamedTuple):
+@dataclass
+class ExtensionData:
     extension: Extension
     entry_point: Any
     config_schema: config_lib.ConfigSchema
     config_defaults: Any
-    command: Command | None
+    command: cyclopts.App | Command | None
 
 
-def load_extensions() -> list[ExtensionData]:
-    """Find all installed extensions.
+class ExtensionManager:
+    installed: list[ExtensionData]
 
-    :returns: list of installed extensions
-    """
-    installed_extensions = []
+    def __init__(self) -> None:
+        self.installed = self._scan_installed()
 
-    for entry_point in metadata.entry_points(group="mopidy.ext"):
-        logger.debug("Loading entry point: %s", entry_point)
-        try:
-            extension_class = entry_point.load()
-        except Exception:
-            logger.exception(f"Failed to load extension {entry_point.name}.")
-            continue
+    def _scan_installed(self) -> list[ExtensionData]:
+        """Find all installed extensions."""
+        installed_extensions = []
 
-        try:
-            if not issubclass(extension_class, Extension):
-                raise TypeError  # noqa: TRY301
-        except TypeError:
-            logger.error(
-                "Entry point %s did not contain a valid extension class: %r",
-                entry_point.name,
-                extension_class,
+        for entry_point in metadata.entry_points(group="mopidy.ext"):
+            logger.debug("Loading entry point: %s", entry_point)
+            try:
+                extension_class = entry_point.load()
+            except Exception:
+                logger.exception(f"Failed to load extension {entry_point.name}.")
+                continue
+
+            try:
+                if not issubclass(extension_class, Extension):
+                    raise TypeError  # noqa: TRY301
+            except TypeError:
+                logger.error(
+                    "Entry point %s did not contain a valid extension class: %r",
+                    entry_point.name,
+                    extension_class,
+                )
+                continue
+
+            try:
+                extension = extension_class()
+                # Ensure required extension attributes are present after try block
+                _ = extension.dist_name
+                _ = extension.ext_name
+                _ = extension.version
+                extension_data = ExtensionData(
+                    entry_point=entry_point,
+                    extension=extension,
+                    config_schema=extension.get_config_schema(),
+                    config_defaults=extension.get_default_config(),
+                    command=extension.get_command(),
+                )
+            except Exception:
+                logger.exception(
+                    "Setup of extension from entry point %s failed, ignoring extension.",
+                    entry_point.name,
+                )
+                continue
+
+            installed_extensions.append(extension_data)
+
+            logger.debug(
+                "Loaded extension: %s %s", extension.dist_name, extension.version
             )
-            continue
 
-        try:
-            extension = extension_class()
-            # Ensure required extension attributes are present after try block
-            _ = extension.dist_name
-            _ = extension.ext_name
-            _ = extension.version
-            extension_data = ExtensionData(
-                entry_point=entry_point,
-                extension=extension,
-                config_schema=extension.get_config_schema(),
-                config_defaults=extension.get_default_config(),
-                command=extension.get_command(),
-            )
-        except Exception:
-            logger.exception(
-                "Setup of extension from entry point %s failed, ignoring extension.",
-                entry_point.name,
-            )
-            continue
+        # Sort extensions by distribution name for consistent ordering
+        installed_extensions.sort(key=lambda ed: ed.extension.dist_name)
 
-        installed_extensions.append(extension_data)
+        names = (ed.extension.ext_name for ed in installed_extensions)
+        logger.debug("Discovered extensions: %s", ", ".join(names))
+        return installed_extensions
 
-        logger.debug("Loaded extension: %s %s", extension.dist_name, extension.version)
+    def init_commands(self, app: cyclopts.App) -> None:
+        for extension_data in self.installed:
+            match extension_data.command:
+                case cyclopts.App():
+                    app.command(
+                        extension_data.command,
+                        name=extension_data.extension.ext_name,
+                    )
+                case Command():
+                    logger.warning(
+                        f"The {extension_data.extension.ext_name} extension's command "
+                        "must be a converted to use cyclopts."
+                    )
+                case None:
+                    pass
 
-    names = (ed.extension.ext_name for ed in installed_extensions)
-    logger.debug("Discovered extensions: %s", ", ".join(names))
-    return installed_extensions
+    @property
+    def config_schemas(self) -> ConfigSchemas:
+        return [ed.config_schema for ed in self.installed]
+
+    @property
+    def config_defaults(self) -> list[str]:
+        return [ed.config_defaults for ed in self.installed]
 
 
 def validate_extension_data(data: ExtensionData) -> bool:  # noqa: PLR0911
