@@ -6,11 +6,7 @@ import pytest
 
 import mopidy.ext._extension
 from mopidy import config, exceptions, ext
-from mopidy._app.extensions import (
-    ExtensionData,
-    load_extensions,
-    validate_extension_data,
-)
+from mopidy._app.extensions import ExtensionRecord
 from tests import IsA, any_str
 
 
@@ -18,7 +14,6 @@ class DummyExtension(ext.Extension):
     dist_name = "Mopidy-Foobar"
     ext_name = "foobar"
     version = "1.2.3"
-    location = __file__
 
     def get_default_config(self):
         return "[foobar]\nenabled = true"
@@ -47,7 +42,7 @@ class TestLoadExtensions:
         assert load_extensions() == []
 
     def test_load_extensions(self, mock_entry_point):
-        expected = ExtensionData(
+        expected = ExtensionRecord(
             any_testextension,
             mock_entry_point,
             IsA(config.ConfigSchema),
@@ -108,7 +103,7 @@ class TestValidateExtensionData:
         extension = DummyExtension()
         entry_point = mock.Mock()
         entry_point.name = extension.ext_name
-        return ExtensionData(
+        return ExtensionRecord(
             extension,
             entry_point,
             extension.get_config_schema(),
