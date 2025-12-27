@@ -49,9 +49,6 @@ class Config(Mapping):
     def __getitem__(self, key: str) -> ConfigSection:
         return ConfigSection(key, self._data.__getitem__(key))
 
-    def __setitem__(self, key: str, value: dict[str, Any]) -> None:
-        self._data[key] = value
-
     def __iter__(self) -> Iterator[str]:
         return self._data.__iter__()
 
@@ -69,9 +66,6 @@ class ConfigSection(Mapping):
 
     def __getitem__(self, key: str) -> Any:
         return self._data.__getitem__(key)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self._data[key] = value
 
     def __iter__(self) -> Iterator[str]:
         return self._data.__iter__()
