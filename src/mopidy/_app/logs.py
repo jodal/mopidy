@@ -7,6 +7,9 @@ import platform
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar, get_args, override
 
+from rich.highlighter import NullHighlighter
+from rich.logging import RichHandler
+
 from mopidy._lib.logs import TRACE_LOG_LEVEL
 from mopidy.config.types import LogColorName
 
@@ -83,7 +86,12 @@ def setup_logging(
 
     handler: logging.StreamHandler
     if config["logging"]["color"]:
-        handler = ColorizingStreamHandler(config.get("logcolors", {}))
+        handler = RichHandler(
+            show_path=False,
+            markup=True,
+            highlighter=NullHighlighter(),
+            log_time_format="%H:%M:%S",
+        )
     else:
         handler = logging.StreamHandler()
     handler.addFilter(verbosity_filter)
