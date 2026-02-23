@@ -9,6 +9,17 @@ Copyright &copy; 2009-2026 Stein Magnus Jodal and contributors
 edit_uri = "edit/main/docs/"
 repo_url = "https://github.com/mopidy/mopidy"
 use_directory_urls = true
+nav = [
+    {"Home" = "index.md"},
+    {"Usage" = [
+        "usage/index.md",
+        "usage/service.md",
+        "usage/terminal.md",
+        "usage/config.md",
+        "usage/clients.md",
+        "usage/troubleshooting.md",
+    ]},
+]
 
 [project.theme]
 language = "en"
