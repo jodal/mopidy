@@ -1,12 +1,10 @@
-# ruff: noqa: ARG002
-
 from __future__ import annotations
 
 import itertools
 import logging
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import pykka
 from pykka.typing import ActorMemberMixin, proxy_method
@@ -46,23 +44,31 @@ class Core(
     backend.BackendListener,
     mixer.MixerListener,
 ):
+    """The main object of the Core API.
+
+    The core layer sits inbetween the frontends and the backends.
+
+    The core API is the interface that is used by frontends like mopidy-http and
+    mopidy-mpd to control music playback.
+    """
+
     library: LibraryController
-    """An instance of :class:`~mopidy.core.LibraryController`"""
+    """An instance of [`LibraryController`][mopidy.core.LibraryController]."""
 
     history: HistoryController
-    """An instance of :class:`~mopidy.core.HistoryController`"""
+    """An instance of [`HistoryController`][mopidy.core.HistoryController]."""
 
     mixer: MixerController
-    """An instance of :class:`~mopidy.core.MixerController`"""
+    """An instance of [`MixerController`][mopidy.core.MixerController]."""
 
     playback: PlaybackController
-    """An instance of :class:`~mopidy.core.PlaybackController`"""
+    """An instance of [`PlaybackController`][mopidy.core.PlaybackController]."""
 
     playlists: PlaylistsController
-    """An instance of :class:`~mopidy.core.PlaylistsController`"""
+    """An instance of [`PlaylistsController`][mopidy.core.PlaylistsController]."""
 
     tracklist: TracklistController
-    """An instance of :class:`~mopidy.core.TracklistController`"""
+    """An instance of [`TracklistController`][mopidy.core.TracklistController]."""
 
     def __init__(
         self,
@@ -104,15 +110,22 @@ class Core(
         """Get version of the Mopidy core API."""
         return mopidy.__version__
 
+    # The methods below are not part of the public interface, but are just an
+    # implemenation of BackendListener and MixerListener.
+
+    @override
     def reached_end_of_stream(self) -> None:
         self.playback._on_end_of_stream()
 
+    @override
     def stream_changed(self, uri: Uri) -> None:
         self.playback._on_stream_changed(uri)
 
+    @override
     def position_changed(self, position: int) -> None:
         self.playback._on_position_changed(position)
 
+    @override
     def state_changed(
         self,
         old_state: PlaybackState,
@@ -136,18 +149,22 @@ class Core(
             self.playback.set_state(new_state)
             self.playback._trigger_track_playback_paused()
 
+    @override
     def playlists_loaded(self) -> None:
         # Forward event from backend to frontends
         CoreListener.send("playlists_loaded")
 
+    @override
     def volume_changed(self, volume: int) -> None:
         # Forward event from mixer to frontends
         CoreListener.send("volume_changed", volume=volume)
 
+    @override
     def mute_changed(self, mute: bool) -> None:
         # Forward event from mixer to frontends
         CoreListener.send("mute_changed", mute=mute)
 
+    @override
     def tags_changed(self, tags: set[str]) -> None:
         if not self.audio or "title" not in tags:
             return

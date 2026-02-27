@@ -19,6 +19,11 @@ nav = [
         "usage/clients.md",
         "usage/troubleshooting.md",
     ]},
+    {"Reference" = [
+        "reference/architecture.md",
+        "reference/models.md",
+        "reference/core.md",
+    ]}
 ]
 
 [project.theme]
@@ -76,6 +81,52 @@ repo = "fontawesome/brands/github"
 icon = "fontawesome/brands/github"
 link = "https://github.com/mopidy/mopidy"
 
+[project.plugins.mkdocstrings]
+default_handler = "python"
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+show_source = false
+
+# Docstrings
+docstring_options.ignore_init_summary = true
+docstring_section_style = "list"
+docstring_style = "google"
+
+# Cross-references
+relative_crossrefs = true
+scoped_crossrefs = true
+signature_crossrefs = true
+unwrap_annotated = true
+
+# Members
+filters = "public"
+inherited_members = true
+summary = true
+
+# Headings
+heading_level = 1
+parameter_headings = true
+type_parameter_headings = true
+show_root_heading = true
+show_root_full_path = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+
+# Signatures
+line_length = 80
+merge_init_into_class = true
+separate_signature = true
+show_signature_annotations = true
+show_signature_type_parameters = true
+
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+# Inline highlight of code snippets ala `#!python range(10)`
+
 [project.markdown_extensions.pymdownx.keys]
 # More visual rendering of keyboard shortcuts
 
@@ -84,6 +135,9 @@ link = "https://github.com/mopidy/mopidy"
 
 [project.markdown_extensions.pymdownx.superfences]
 # Better code block support
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
+]
 
 [project.markdown_extensions.tables]
 # Nice data tables, used e.g. for config values.
