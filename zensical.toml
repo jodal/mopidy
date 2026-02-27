@@ -19,6 +19,10 @@ nav = [
         "usage/clients.md",
         "usage/troubleshooting.md",
     ]},
+    {"API documentation" = [
+        "api/architecture.md",
+        "api/models.md",
+    ]}
 ]
 
 [project.theme]
@@ -76,6 +80,10 @@ repo = "fontawesome/brands/github"
 icon = "fontawesome/brands/github"
 link = "https://github.com/mopidy/mopidy"
 
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+# Inline highlight of code snippets ala `#!python range(10)`
+
 [project.markdown_extensions.pymdownx.keys]
 # More visual rendering of keyboard shortcuts
 
@@ -84,6 +92,9 @@ link = "https://github.com/mopidy/mopidy"
 
 [project.markdown_extensions.pymdownx.superfences]
 # Better code block support
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
+]
 
 [project.markdown_extensions.tables]
 # Nice data tables, used e.g. for config values.
