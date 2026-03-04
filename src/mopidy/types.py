@@ -71,11 +71,11 @@ type QueryField = DistinctField | SearchField | TracklistField
 class PlaybackState(enum.StrEnum):
     """Enum of playback states."""
 
-    #: Constant representing the paused state.
     PAUSED = "paused"
+    """Constant representing the paused state."""
 
-    #: Constant representing the playing state.
     PLAYING = "playing"
+    """Constant representing the playing state."""
 
-    #: Constant representing the stopped state.
     STOPPED = "stopped"
+    """Constant representing the stopped state."""

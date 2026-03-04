@@ -23,6 +23,7 @@ nav = [
         "reference/architecture.md",
         "reference/models.md",
         "reference/core.md",
+        "reference/types.md",
     ]}
 ]
 
@@ -122,6 +123,10 @@ merge_init_into_class = true
 separate_signature = true
 show_signature_annotations = true
 show_signature_type_parameters = true
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
+# Better admonition support
 
 [project.markdown_extensions.pymdownx.highlight]
 [project.markdown_extensions.pymdownx.inlinehilite]
