@@ -95,9 +95,11 @@ class PlaybackProvider:
     def on_source_setup(self, source: Gst.Element) -> None:
         """Called when a new GStreamer source is created, to allow configuration.
 
-        This runs in the audio thread so should not block.
-
         *MAY be reimplemented by subclass.*
+
+        This runs on a GStreamer streaming thread, not in an actor. It *MUST
+        NOT* block, and in particular it *MUST NOT* call `.get()` on an actor
+        proxy: the thread it runs on may be the one an actor is waiting for.
 
         Args:
             source: The GStreamer source element.
@@ -128,6 +130,41 @@ class PlaybackProvider:
             uri,
             live_stream=self.is_live(uri),
             download=self.should_download(uri),
+        ).get()
+        return True
+
+    def queue_track(self, track: Track) -> bool:
+        """Have the next track ready, for a gapless change.
+
+        *MAY be reimplemented by subclass.*
+
+        Core calls this while the current track still plays. The audio layer
+        starts on the track by itself, without asking anything, which is what
+        keeps a GStreamer thread from waiting for an actor.
+
+        The default implementation calls [translate_uri][], the same as
+        [change_track][], so most backends need nothing here. A backend that
+        reimplements [change_track][] to do bookkeeping *MUST* reimplement
+        this as well, or that bookkeeping is skipped on gapless changes.
+
+        Returns `True` if the track was queued, else `False`.
+
+        Args:
+            track: The track to play after the current one.
+        """
+        uri = self.translate_uri(track.uri)
+        if uri != track.uri:
+            logger.debug("Backend translated URI from %s to %s", track.uri, uri)
+        if uri is None:
+            return False
+        self.audio.set_next_uri(
+            uri,
+            live_stream=self.is_live(uri),
+            download=self.should_download(uri),
+            # The callback goes with the source, because by the time the audio
+            # layer activates it, the audio actor's own callback may belong to
+            # another backend.
+            source_setup_callback=self.on_source_setup,
         ).get()
         return True
 
@@ -178,6 +215,7 @@ class PlaybackProviderProxy:
     should_download = proxy_method(PlaybackProvider.should_download)
     on_source_setup = proxy_method(PlaybackProvider.on_source_setup)
     change_track = proxy_method(PlaybackProvider.change_track)
+    queue_track = proxy_method(PlaybackProvider.queue_track)
     resume = proxy_method(PlaybackProvider.resume)
     seek = proxy_method(PlaybackProvider.seek)
     stop = proxy_method(PlaybackProvider.stop)

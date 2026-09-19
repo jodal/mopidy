@@ -61,6 +61,7 @@ class DummyPlaybackProvider(backend.PlaybackProvider):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._uri = None
+        self._queued_uri = None
         self._time_position = 0
 
     def pause(self):
@@ -73,6 +74,13 @@ class DummyPlaybackProvider(backend.PlaybackProvider):
         """Pass a track with URI 'dummy:error' to force failure"""
         self._uri = track.uri
         self._time_position = 0
+        return True
+
+    def queue_track(self, track):
+        # This provider keeps its own bookkeeping instead of using the audio
+        # layer, so it has to reimplement this too. See the docstring on
+        # PlaybackProvider.queue_track().
+        self._queued_uri = track.uri
         return True
 
     def prepare_change(self):
