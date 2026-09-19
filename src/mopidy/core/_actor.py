@@ -122,6 +122,10 @@ class Core(
         self.playback._on_stream_changed(uri)
 
     @override
+    def next_uri_activated(self, uri: Uri) -> None:
+        self.playback._on_next_uri_activated(uri)
+
+    @override
     def position_changed(self, position: int) -> None:
         self.playback._on_position_changed(position)
 

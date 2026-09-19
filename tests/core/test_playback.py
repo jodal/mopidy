@@ -76,9 +76,6 @@ class BaseTest:
         )
         self.playback = self.core.playback
 
-        # We don't have a core actor running, so call about to finish directly.
-        self.audio.set_about_to_finish_callback(self.playback._on_about_to_finish)
-
         with pytest.deprecated_call():
             self.core.tracklist.add(self.tracks)
 
@@ -88,6 +85,10 @@ class BaseTest:
 
         def send(event, **kwargs):
             self.events.append((event, kwargs))
+            # We don't have a core actor running, so dispatch the events the
+            # playback controller reacts to ourselves.
+            if event == "next_uri_activated":
+                self.playback._on_next_uri_activated(**kwargs)
 
         self.send_mock.side_effect = send
 

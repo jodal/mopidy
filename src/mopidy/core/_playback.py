@@ -5,7 +5,6 @@ import urllib.parse
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from pykka.messages import ProxyCall
 from pykka.typing import proxy_method
 
 from mopidy.core import _validation as validation
@@ -45,6 +44,8 @@ class PlaybackController:
 
         self._current_tl_track: TlTrack | None = None
         self._pending_tl_track: TlTrack | None = None
+        self._next_tl_track: TlTrack | None = None
+        self._queueing_next: bool = False
 
         self._pending_position: DurationMs | None = None
         self._last_position: DurationMs | None = None
@@ -52,9 +53,6 @@ class PlaybackController:
 
         self._start_at_position: DurationMs | None = None
         self._start_paused: bool = False
-
-        if self._audio:
-            self._audio.set_about_to_finish_callback(self._on_about_to_finish_callback)
 
     def _get_backend(self, tl_track: TlTrack | None) -> BackendProxy | None:
         if tl_track is None:
@@ -170,6 +168,7 @@ class PlaybackController:
             if self._pending_position is None:
                 self.set_state(PlaybackState.PLAYING)
                 self._trigger_track_playback_started()
+                self._queue_next()
                 seek_ok = False
                 if self._start_at_position:
                     seek_ok = self.seek(self._start_at_position)
@@ -181,6 +180,7 @@ class PlaybackController:
                 self._seek(self._pending_position)
                 self.set_state(PlaybackState.PLAYING)
                 self._trigger_track_playback_started()
+                self._queue_next()
 
     def _on_position_changed(self, _position: int) -> None:
         if self._pending_position is not None:
@@ -190,24 +190,68 @@ class PlaybackController:
                 self._start_paused = False
                 self.pause()
 
-    def _on_about_to_finish_callback(self) -> None:
-        """Callback that performs a blocking actor call to the real callback.
+    def _queue_next(self) -> None:
+        """Resolve the track after the current one and park it in audio.
 
-        This is passed to audio, which is allowed to call this code from the
-        audio thread. We pass execution into the core actor to ensure that
-        there is no unsafe access of state in core. This must block until
-        we get a response.
+        Runs on the core thread while the current track still plays, so the
+        backend and the audio layer can take their time. The audio layer then
+        starts the track by itself, without asking anyone.
         """
-        self.core.actor_ref.ask(
-            ProxyCall(
-                attr_path=("playback", "_on_about_to_finish"),
-                args=(),
-                kwargs={},
-            ),
-        )
-
-    def _on_about_to_finish(self) -> None:
         if self._state == PlaybackState.STOPPED:
+            return
+
+        if self._queueing_next:
+            # _mark_unplayable() below can change the tracklist, which calls
+            # _on_tracklist_change(), which calls us again.
+            return
+
+        self._queueing_next = True
+        try:
+            self._do_queue_next()
+        finally:
+            self._queueing_next = False
+
+    def _do_queue_next(self) -> None:
+        current = self._pending_tl_track or self._current_tl_track
+        pending = self.core.tracklist.eot_track(current)  # ty: ignore[deprecated]
+
+        if pending is not None and pending == self._next_tl_track:
+            return  # Already queued.
+
+        # avoid endless loop if 'repeat' is 'true' and no track is playable
+        # * 2 -> second run to get all playable track in a shuffled playlist
+        count = self.core.tracklist.get_length() * 2
+
+        while pending:
+            backend = self._get_backend(pending)
+            if backend:
+                try:
+                    if backend.playback.queue_track(pending.track).get():
+                        self._next_tl_track = pending
+                        return
+                except Exception:
+                    logger.exception(
+                        "%s backend caused an exception.",
+                        backend.actor_ref.actor_class.__name__,
+                    )
+
+            self.core.tracklist._mark_unplayable(pending)
+            pending = self.core.tracklist.eot_track(pending)  # ty: ignore[deprecated]
+            count -= 1
+            if not count:
+                logger.info("No playable track in the list.")
+                break
+
+        self._clear_queued_next()
+
+    def _clear_queued_next(self) -> None:
+        self._next_tl_track = None
+        if self._audio:
+            self._audio.clear_next_uri()
+
+    def _on_next_uri_activated(self, uri: Uri) -> None:  # noqa: ARG002
+        """The audio layer moved on to the track we queued."""
+        if self._next_tl_track is None:
             return
 
         # Unless overridden by other calls (e.g. next / previous / stop) this
@@ -222,30 +266,8 @@ class PlaybackController:
             # handled.
             pass
 
-        pending = self.core.tracklist.eot_track(self._current_tl_track)  # ty: ignore[deprecated]
-        # avoid endless loop if 'repeat' is 'true' and no track is playable
-        # * 2 -> second run to get all playable track in a shuffled playlist
-        count = self.core.tracklist.get_length() * 2
-
-        while pending:
-            backend = self._get_backend(pending)
-            if backend:
-                try:
-                    if backend.playback.change_track(pending.track).get():
-                        self._pending_tl_track = pending
-                        break
-                except Exception:
-                    logger.exception(
-                        "%s backend caused an exception.",
-                        backend.actor_ref.actor_class.__name__,
-                    )
-
-            self.core.tracklist._mark_unplayable(pending)
-            pending = self.core.tracklist.eot_track(pending)  # ty: ignore[deprecated]
-            count -= 1
-            if not count:
-                logger.info("No playable track in the list.")
-                break
+        self._pending_tl_track = self._next_tl_track
+        self._next_tl_track = None
 
     def _on_tracklist_change(self) -> None:
         """Tell the playback controller that the current playlist has changed.
@@ -258,6 +280,7 @@ class PlaybackController:
             self._set_current_tl_track(None)
         elif self.get_current_tl_track() not in tl_tracks:
             self._set_current_tl_track(None)
+        self._queue_next()
 
     def next(self) -> None:
         """Change to the next track.
