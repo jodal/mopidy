@@ -45,6 +45,33 @@ class Audio:
         """
         raise NotImplementedError
 
+    def set_next_uri(
+        self,
+        uri: str,
+        live_stream: bool = False,
+        download: bool = False,
+        source_setup_callback: Callable[[Gst.Element], None] | None = None,
+    ) -> None:
+        """Set the source to play when the current one is about to finish.
+
+        The audio layer activates it on its own, on a GStreamer thread, and
+        sends [next_uri_activated][mopidy.audio.AudioListener.next_uri_activated]
+        when it does. [prepare_change][] is not needed for this.
+
+        Args:
+            uri: The URI to play next.
+            live_stream: Disables buffering, reducing latency for streams,
+                and discarding data when paused.
+            download: Enables "download" buffering mode.
+            source_setup_callback: Callback to run when the source is set up.
+                It runs on a GStreamer thread and *MUST NOT* block on an actor.
+        """
+        raise NotImplementedError
+
+    def clear_next_uri(self) -> None:
+        """Forget any source set with [set_next_uri][]."""
+        raise NotImplementedError
+
     def set_source_setup_callback(
         self,
         callback: Callable[[Gst.Element], None],
@@ -138,6 +165,8 @@ class AudioProxy(ActorMemberMixin, pykka.ActorProxy[AudioActor]):
 
     state = proxy_field(Audio.state)
     set_uri = proxy_method(Audio.set_uri)
+    set_next_uri = proxy_method(Audio.set_next_uri)
+    clear_next_uri = proxy_method(Audio.clear_next_uri)
     set_source_setup_callback = proxy_method(Audio.set_source_setup_callback)
     set_about_to_finish_callback = proxy_method(Audio.set_about_to_finish_callback)
     get_position = proxy_method(Audio.get_position)

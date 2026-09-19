@@ -8,6 +8,8 @@ from mopidy._lib.gi import Gst
 from mopidy.types import PlaybackState
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mopidy._lib.gi import GLib
 
 
@@ -70,6 +72,28 @@ class GstError:
 
 
 @dataclasses.dataclass(frozen=True)
+class GstNextSource:
+    """A source resolved ahead of time, ready for the streaming thread.
+
+    The source setup callback travels with the source, because by the time
+    the audio layer activates it, the audio actor's own callback may belong
+    to another backend.
+    """
+
+    uri: str
+    live_stream: bool
+    download: bool
+    source_setup_callback: Callable[[Gst.Element], None] | None
+
+
+@dataclasses.dataclass(frozen=True)
+class GstNextUriActivated:
+    """The streaming thread started on the queued source."""
+
+    uri: str
+
+
+@dataclasses.dataclass(frozen=True)
 class GstMissingPlugin:
     """No installed element can handle the media."""
 
@@ -120,3 +144,6 @@ type GstBusMessage = (
     | GstTag
     | GstWarning
 )
+
+type GstActorMessage = GstBusMessage | GstNextUriActivated
+"""Everything the audio actor can be told from a GStreamer thread."""

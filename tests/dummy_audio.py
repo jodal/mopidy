@@ -28,6 +28,7 @@ class DummyAudio(audio.Audio, pykka.ThreadingActor):
         self._source_setup_callback = None
         self._about_to_finish_callback = None
         self._uri = None
+        self._next_source = None
         self._stream_changed = False
         self._live_stream = False
         self._tags = {}
@@ -41,6 +42,20 @@ class DummyAudio(audio.Audio, pykka.ThreadingActor):
         self._stream_changed = True
         self._live_stream = live_stream
         self._tags = {}
+
+    @override
+    def set_next_uri(
+        self,
+        uri,
+        live_stream=False,
+        download=False,
+        source_setup_callback=None,
+    ):
+        self._next_source = (uri, live_stream, source_setup_callback)
+
+    @override
+    def clear_next_uri(self):
+        self._next_source = None
 
     @override
     def set_source_setup_callback(self, callback):
@@ -72,10 +87,12 @@ class DummyAudio(audio.Audio, pykka.ThreadingActor):
     def prepare_change(self):
         self._uri = None
         self._source_setup_callback = None
+        self._next_source = None
         return True
 
     @override
     def stop_playback(self):
+        self._next_source = None
         return self._change_state(PlaybackState.STOPPED)
 
     @override
@@ -129,11 +146,23 @@ class DummyAudio(audio.Audio, pykka.ThreadingActor):
     def get_about_to_finish_callback(self):
         # This needs to be called from outside the actor or we lock up.
         def wrapper():
-            if self._about_to_finish_callback:
+            activated = False
+
+            if self._next_source is not None:
+                uri, live_stream, source_setup_callback = self._next_source
+                self._next_source = None
+                # Mirror GstAudio: the event goes out before the new source.
+                audio.AudioListener.send("next_uri_activated", uri=uri)
+                self.prepare_change()
+                self._source_setup_callback = source_setup_callback
+                self.set_uri(uri, live_stream=live_stream)
+                activated = True
+            elif self._about_to_finish_callback:
                 self.prepare_change()
                 self._about_to_finish_callback()
+                activated = self._uri is not None
 
-            if not self._uri or not self._about_to_finish_callback:
+            if not activated:
                 self._tags = {}
                 audio.AudioListener.send("reached_end_of_stream")
             else:

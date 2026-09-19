@@ -424,6 +424,43 @@ class TestAudioEvent(BaseTest):
 
         assert not self.audio.get_current_tags().get()
 
+    def test_gapless_with_next_uri(self):
+        event = self.listener.wait("reached_end_of_stream").get()
+
+        self.audio.prepare_change()
+        self.audio.set_uri(self.uris[0])
+        self.audio.start_playback()
+        self.audio.set_next_uri(self.uris[1]).get()
+
+        self.possibly_trigger_fake_about_to_finish()
+        self.audio.testing_gst__wait_for_state_change().get()
+
+        self.possibly_trigger_fake_about_to_finish()
+        self.audio.testing_gst__wait_for_state_change().get()
+        if not event.wait(timeout=1.0):
+            pytest.fail("EOS not received")
+
+        self.assert_event("next_uri_activated", uri=self.uris[1])
+        self.assert_event("stream_changed", uri=self.uris[0])
+        self.assert_event("stream_changed", uri=self.uris[1])
+
+    def test_next_uri_is_only_used_once(self):
+        event = self.listener.wait("reached_end_of_stream").get()
+
+        self.audio.prepare_change()
+        self.audio.set_uri(self.uris[0])
+        self.audio.start_playback()
+        self.audio.set_next_uri(self.uris[1]).get()
+
+        self.possibly_trigger_fake_about_to_finish()
+        self.audio.testing_gst__wait_for_state_change().get()
+
+        # The slot is empty now, so the second track runs to the end.
+        self.possibly_trigger_fake_about_to_finish()
+        self.audio.testing_gst__wait_for_state_change().get()
+        if not event.wait(timeout=1.0):
+            pytest.fail("EOS not received")
+
     def test_gapless(self):
         uris = self.uris[1:]
         event = self.listener.wait("reached_end_of_stream").get()
@@ -683,3 +720,56 @@ def test_source_setup_callback(gst_audio, source):
     gst_audio._on_gst_source_setup("dummy", source)
 
     mock_callback.assert_called_once()
+
+
+def test_set_next_uri_stores_the_source(gst_audio):
+    gst_audio.set_next_uri("dummy:a", live_stream=True, download=False)
+
+    assert gst_audio._next_source is not None
+    assert gst_audio._next_source.uri == "dummy:a"
+    assert gst_audio._next_source.live_stream is True
+
+
+def test_clear_next_uri_empties_the_slot(gst_audio):
+    gst_audio.set_next_uri("dummy:a")
+
+    gst_audio.clear_next_uri()
+
+    assert gst_audio._next_source is None
+
+
+def test_prepare_change_empties_the_slot(gst_audio, pipeline):
+    gst_audio.set_next_uri("dummy:a")
+
+    gst_audio.prepare_change()
+
+    assert gst_audio._next_source is None
+
+
+def test_stop_playback_empties_the_slot(gst_audio, pipeline):
+    gst_audio.set_next_uri("dummy:a")
+
+    gst_audio.stop_playback()
+
+    assert gst_audio._next_source is None
+
+
+def test_about_to_finish_falls_back_to_the_callback(gst_audio):
+    callback = mock.Mock()
+    gst_audio.set_about_to_finish_callback(callback)
+
+    gst_audio._on_gst_about_to_finish(None)
+
+    callback.assert_called_once_with()
+
+
+def test_about_to_finish_prefers_the_slot(gst_audio, pipeline):
+    callback = mock.Mock()
+    gst_audio.set_about_to_finish_callback(callback)
+    gst_audio.set_next_uri("dummy:a", download=True)
+
+    gst_audio._on_gst_about_to_finish(None)
+
+    callback.assert_not_called()
+    pipeline.set_uri.assert_called_once_with("dummy:a", download=True)
+    assert gst_audio._next_source is None

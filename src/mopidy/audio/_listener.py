@@ -38,6 +38,18 @@ class AudioListener(listener.Listener):
             uri: URI the stream has started playing.
         """
 
+    def next_uri_activated(self, uri: Uri) -> None:
+        """Called when the audio layer starts on the queued next source.
+
+        Sent from a GStreamer streaming thread, before the new source
+        produces any tags or reports that its stream has started.
+
+        *MAY* be implemented by actor.
+
+        Args:
+            uri: URI of the source that was activated.
+        """
+
     def position_changed(self, position: DurationMs) -> None:
         """Called whenever the position of the stream changes.
 

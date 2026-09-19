@@ -16,12 +16,15 @@ from mopidy.audio._api import Audio
 from mopidy.audio._gst.mixer import GstSoftwareMixerAdapter
 from mopidy.audio._gst.pipeline import GstPipeline
 from mopidy.audio._gst.types import (
+    GstActorMessage,
     GstAsyncDone,
     GstBuffering,
     GstBusMessage,
     GstEndOfStream,
     GstError,
     GstMissingPlugin,
+    GstNextSource,
+    GstNextUriActivated,
     GstState,
     GstStateChanged,
     GstStreamStart,
@@ -66,6 +69,9 @@ class GstAudio(Audio, pykka.ThreadingActor):
         self._pending_tags: dict[str, list[Any]] | None = None
 
         self._pipeline: GstPipeline | None = None
+        self._next_source: GstNextSource | None = None
+        self._next_source_lock = threading.Lock()
+        self._thread: threading.Thread | None = None
         self._about_to_finish_callback: Callable | None = None
         self._source_setup_callback: Callable | None = None
 
@@ -110,14 +116,47 @@ class GstAudio(Audio, pykka.ThreadingActor):
             self.mixer.teardown()
 
     def _on_gst_about_to_finish(self, _element: Gst.Element) -> None:
+        gst_logger.debug("Got about-to-finish event.")
+
+        with self._next_source_lock:
+            next_source, self._next_source = self._next_source, None
+
+        if next_source is not None:
+            self._activate_next_source(next_source)
+            return
+
+        # TODO: Remove with set_about_to_finish_callback(). The callback goes
+        # through the core actor, so it deadlocks if we are the actor thread.
         if self._thread == threading.current_thread():
             logger.error("about-to-finish in actor, aborting to avoid deadlock.")
             return
 
-        gst_logger.debug("Got about-to-finish event.")
         if self._about_to_finish_callback:
             logger.debug("Running about-to-finish callback.")
             self._about_to_finish_callback()
+
+    def _activate_next_source(self, next_source: GstNextSource) -> None:
+        """Start on the queued source. Runs on a GStreamer streaming thread.
+
+        Nothing here waits for an actor.
+        """
+        assert self._pipeline
+
+        self._live_stream = next_source.live_stream
+        self._source_setup_callback = next_source.source_setup_callback
+
+        # Tell the actor before we set the uri, so that it updates its pending
+        # state ahead of any TAG or STREAM_START message from the new source.
+        self._tell(GstNextUriActivated(next_source.uri))
+
+        logger.debug("Audio event: next_uri_activated(uri=%r)", next_source.uri)
+        AudioListener.send("next_uri_activated", uri=next_source.uri)
+
+        self._pipeline.set_uri(next_source.uri, download=next_source.download)
+
+    def _on_gst_next_uri_activated(self, uri: str) -> None:
+        self._pending_uri = uri
+        self._pending_tags = {}
 
     def _on_gst_source_setup(
         self,
@@ -143,14 +182,20 @@ class GstAudio(Audio, pykka.ThreadingActor):
     def _on_gst_bus_message(self, message: GstBusMessage) -> None:
         # Runs on whichever GStreamer thread posted the message. Hand it to
         # the actor thread, so that all message handling is single threaded.
+        self._tell(message)
+
+    def _tell(self, message: GstActorMessage) -> None:
+        """Hand a message to the actor thread, from a GStreamer thread."""
         try:
             self.actor_ref.tell(message)
         except pykka.ActorDeadError:
             # The pipeline outlives the actor for a moment at teardown.
-            gst_logger.debug("Dropped bus message, the audio actor is gone.")
+            gst_logger.debug(
+                "Dropped %s, the audio actor is gone.", type(message).__name__
+            )
 
     @override
-    def on_receive(self, message: Any) -> None:
+    def on_receive(self, message: Any) -> None:  # noqa: C901
         match message:
             case GstAsyncDone():
                 self._on_gst_async_done()
@@ -162,6 +207,8 @@ class GstAudio(Audio, pykka.ThreadingActor):
                 self._on_gst_error(error, debug)
             case GstMissingPlugin(description, installer_detail):
                 self._on_gst_missing_plugin(description, installer_detail)
+            case GstNextUriActivated(uri):
+                self._on_gst_next_uri_activated(uri)
             case GstStateChanged(old_state, new_state, pending_state):
                 self._on_gst_state_changed(old_state, new_state, pending_state)
             case GstStreamStart():
@@ -351,6 +398,33 @@ class GstAudio(Audio, pykka.ThreadingActor):
             self.mixer.set_volume(current_volume)
 
     @override
+    def set_next_uri(
+        self,
+        uri: str,
+        live_stream: bool = False,
+        download: bool = False,
+        source_setup_callback: Callable[[Gst.Element], None] | None = None,
+    ) -> None:
+        if live_stream and download:
+            logger.warning(
+                "Ambiguous buffering flags: "
+                "'live_stream' and 'download' should not both be set.",
+            )
+
+        with self._next_source_lock:
+            self._next_source = GstNextSource(
+                uri=uri,
+                live_stream=live_stream,
+                download=download,
+                source_setup_callback=source_setup_callback,
+            )
+
+    @override
+    def clear_next_uri(self) -> None:
+        with self._next_source_lock:
+            self._next_source = None
+
+    @override
     def set_source_setup_callback(
         self,
         callback: Callable[[Gst.Element], None],
@@ -398,6 +472,7 @@ class GstAudio(Audio, pykka.ThreadingActor):
         # `Gst.State.READY`.
         assert self._pipeline
 
+        self.clear_next_uri()
         self._buffering = False
         self._target_state = GstState.READY
         return self._pipeline.set_state(GstState.READY)
@@ -406,6 +481,7 @@ class GstAudio(Audio, pykka.ThreadingActor):
     def stop_playback(self) -> bool:
         assert self._pipeline
 
+        self.clear_next_uri()
         self._buffering = False
         self._target_state = GstState.NULL
         return self._pipeline.set_state(GstState.NULL)
